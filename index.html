@@ -509,7 +509,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">跑單業務</label>
-          <input class="form-input" type="text" id="f-agent-input" placeholder="業務姓名" list="agent-list">
+          <input class="form-input" type="text" id="f-agent-input" placeholder="業務姓名" list="agent-list" oninput="autoFillDispatch()">
           <datalist id="agent-list"></datalist>
         </div>
         <div class="form-group">
@@ -968,6 +968,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     showToast('資料已自動更新 ↻', 'success');
   }, 3 * 60 * 1000);
 });
+
+// Auto-fill dispatch date when agent is entered
+function autoFillDispatch() {
+  const agent = document.getElementById('f-agent-input').value.trim();
+  const dispatch = document.getElementById('f-dispatch');
+  if (agent && !dispatch.value) {
+    const today = new Date();
+    dispatch.value = (today.getMonth()+1) + '/' + today.getDate();
+  }
+}
 
 // Keyboard shortcut
 document.addEventListener('keydown', e => {
