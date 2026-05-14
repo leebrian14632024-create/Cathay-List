@@ -492,7 +492,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">聯絡狀況</label>
-          <select class="form-select" id="f-contact-status">
+          <select class="form-select" id="f-contact-status" onchange="toggleApptField()">
             <option value="">—</option>
             <option>待確認</option>
             <option>未接</option>
@@ -515,6 +515,10 @@
         <div class="form-group">
           <label class="form-label">派發日</label>
           <input class="form-input" type="text" id="f-dispatch" placeholder="5/19">
+        </div>
+        <div class="form-group" id="fg-appt" style="display:none">
+          <label class="form-label" style="color:var(--purple)">📅 預約時間</label>
+          <input class="form-input" type="text" id="f-appt" placeholder="5/17 11:00" style="border-color:var(--purple)">
         </div>
         <div class="form-group full">
           <label class="form-label">詳細狀況 / 備註</label>
@@ -848,6 +852,8 @@ function openModal(id) {
     document.getElementById('f-phone').value = r.phone || '';
     document.getElementById('f-region').value = r.region || '';
     document.getElementById('f-contact-status').value = r.status || '';
+    document.getElementById('f-appt').value = r.appt || '';
+    document.getElementById('fg-appt').style.display = r.status === '已預約' ? '' : 'none';
     document.getElementById('f-media-input').value = r.media || '';
     document.getElementById('f-agent-input').value = r.agent || '';
     document.getElementById('f-dispatch').value = r.dispatch || '';
@@ -862,6 +868,8 @@ function openModal(id) {
     document.getElementById('f-phone').value = '';
     document.getElementById('f-region').value = '臺中市';
     document.getElementById('f-contact-status').value = '待確認';
+    document.getElementById('f-appt').value = '';
+    document.getElementById('fg-appt').style.display = 'none';
     document.getElementById('f-media-input').value = '官網';
     document.getElementById('f-agent-input').value = '';
     document.getElementById('f-dispatch').value = today;
@@ -894,6 +902,7 @@ async function saveRecord() {
     agent: document.getElementById('f-agent-input').value.trim(),
     dispatch: document.getElementById('f-dispatch').value,
     notes: document.getElementById('f-notes').value.trim(),
+    appt: document.getElementById('f-appt').value.trim(),
   };
 
   const action = editingId ? 'update' : 'add';
@@ -912,6 +921,10 @@ async function saveRecord() {
   const result = await apiCall(action, rec);
   if (result && result.ok) {
     showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
+    // Auto-add to Google Calendar if 已預約 and has appt time
+    if (rec.status === '已預約' && rec.appt) {
+      await syncToCalendar(rec);
+    }
   }
 }
 
@@ -968,6 +981,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     showToast('資料已自動更新 ↻', 'success');
   }, 3 * 60 * 1000);
 });
+
+// Show/hide 預約時間 field based on status
+function toggleApptField() {
+  const status = document.getElementById('f-contact-status').value;
+  const fg = document.getElementById('fg-appt');
+  if (status === '已預約') {
+    fg.style.display = '';
+    document.getElementById('f-appt').focus();
+  } else {
+    fg.style.display = 'none';
+  }
+}
 
 // Auto-fill dispatch date when agent is entered
 function autoFillDispatch() {
