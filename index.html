@@ -587,12 +587,75 @@ let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
 
-// ★ 舊 appt 欄位（"5/17 11:00"）向後相容：拆成 date + time
-function parseApptLegacy(appt) {
-  if (!appt) return { date: '', time: '' };
-  const m = appt.match(/^(.+?)\s+(\d{1,2}:\d{2})$/);
-  if (m) return { date: m[1].trim(), time: m[2].trim() };
-  return { date: appt.trim(), time: '' };
+// ★ 解析各種預約格式，回傳 { date, time }
+function parseApptLegacy(raw) {
+  if (!raw) return { date: '', time: '' };
+  const s = String(raw).trim();
+
+  // 1. 處理 Date 物件字串，例如 "Tue May 19 2026 00:00:00 GMT+0800 (台北標準時間)"
+  if (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      const dateStr = (d.getMonth()+1) + '/' + d.getDate();
+      // 只有非午夜才顯示時間
+      const h = d.getHours(), mi = d.getMinutes();
+      const timeStr = (h !== 0 || mi !== 0)
+        ? String(h).padStart(2,'0') + ':' + String(mi).padStart(2,'0')
+        : '';
+      return { date: dateStr, time: timeStr };
+    }
+  }
+
+  // 2. 中文格式，例如 "5/19下午3:00" → 拆出日期與時間
+  const cnPmMatch = s.match(/^(\d{1,2}\/\d{1,2})[下午後]{0,2}(\d{1,2}:\d{2})/);
+  if (cnPmMatch) return { date: cnPmMatch[1], time: cnPmMatch[2] };
+
+  // 3. 標準格式 "5/17 11:00" 或 "2026/5/17 11:00"
+  const stdMatch = s.match(/^([\d\/]+)\s+(\d{1,2}:\d{2})/);
+  if (stdMatch) return { date: stdMatch[1], time: stdMatch[2] };
+
+  // 4. 只有日期，沒有時間
+  if (/^\d{1,2}\/\d{1,2}$/.test(s) || /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(s)) {
+    return { date: s, time: '' };
+  }
+
+  // 5. 其他無法解析的，整個放日期欄
+  return { date: s, time: '' };
+}
+
+// ★ 資料正規化：自動拆分舊格式 appt 或 apptDate，並處理 Sheets 時間格問題
+function normalizeRecord(r) {
+  // ── Step 1：先處理 apptTime（可能是 Sheets 時間格 → "Sat Dec 30 1899 HH:MM:SS GMT+..."）
+  if (r.apptTime) {
+    const t = String(r.apptTime).trim();
+    // Google Sheets 純時間格：內部以 1899/12/30 為基準日，辨識關鍵字 "1899"
+    if (/1899/.test(t) || /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/.test(t)) {
+      const d = new Date(t);
+      if (!isNaN(d)) {
+        r.apptTime = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+      } else {
+        r.apptTime = '';
+      }
+    }
+  }
+
+  // ── Step 2：處理 apptDate（可能是舊的合併格式、Date 物件字串、或已正常）
+  const raw = String(r.apptDate || r.appt || '').trim();
+  if (raw) {
+    // 已是乾淨日期格式（"5/17" 或 "2026/5/17"）→ 保留，不覆蓋
+    const isCleanDate = /^\d{1,4}\/\d{1,2}(\/\d{1,2})?$/.test(raw);
+    if (!isCleanDate) {
+      // 需要重新解析（Date 物件字串、中文格式、舊合併格式…）
+      const parsed = parseApptLegacy(raw);
+      r.apptDate = parsed.date;
+      if (!r.apptTime) r.apptTime = parsed.time;
+    }
+  } else {
+    r.apptDate = '';
+  }
+
+  r.apptTime = r.apptTime || '';
+  return r;
 }
 
 // ─── GOOGLE SHEETS API ───
@@ -602,15 +665,7 @@ async function loadData() {
     const res = await fetch(API_URL);
     const json = await res.json();
     if (json.ok) {
-      records = json.data.filter(r => r.name).map(r => {
-        // ★ 向後相容：若後端還是回傳舊的 appt 欄位，自動拆分
-        if (r.appt && !r.apptDate && !r.apptTime) {
-          const parsed = parseApptLegacy(r.appt);
-          r.apptDate = parsed.date;
-          r.apptTime = parsed.time;
-        }
-        return r;
-      });
+      records = json.data.filter(r => r.name).map(r => normalizeRecord(r));
       setSyncStatus('ok');
     } else {
       throw new Error('API error');
@@ -746,11 +801,6 @@ function renderTable() {
   } else {
     document.getElementById('empty-state').style.display = 'none';
     tbody.innerHTML = slice.map(r => {
-      // ★ 預約欄：日期與時間分兩行顯示
-      const apptCell = (r.apptDate || r.apptTime)
-        ? `<div class="appt-date">${esc(r.apptDate)}</div><div class="appt-time">${esc(r.apptTime)}</div>`
-        : '<span style="color:var(--text3)">—</span>';
-
       return `
         <tr onclick="openModal('${r.id}')">
           <td style="color:var(--text3);font-size:12px">${r.year || '—'}</td>
@@ -762,10 +812,10 @@ function renderTable() {
           <td style="color:var(--text2)">${esc(r.media)}</td>
           <td style="color:var(--text2)">${esc(r.agent)}</td>
           <td style="color:var(--text2);font-size:12px">${esc(r.dispatch)}</td>
-          <!-- ★ 拆分後的預約日期欄 -->
-          <td class="appt-col">${apptCell}</td>
-          <!-- ★ 預約時間欄（table 裡合併顯示，可視需求拆開） -->
-          <td style="display:none"></td>
+          <!-- ★ 預約日期（獨立欄） -->
+          <td class="appt-col"><span class="appt-date">${esc(r.apptDate) || '<span style="color:var(--text3)">—</span>'}</span></td>
+          <!-- ★ 預約時間（獨立欄） -->
+          <td class="appt-col"><span class="appt-time" style="font-size:13px;color:var(--purple)">${esc(r.apptTime) || '<span style="color:var(--text3)">—</span>'}</span></td>
           <td class="notes-col" title="${esc(r.notes)}">${esc(r.notes)}</td>
           <td style="width:24px;text-align:center;color:var(--text3);font-size:16px">›</td>
         </tr>
