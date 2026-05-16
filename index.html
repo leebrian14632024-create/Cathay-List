@@ -774,10 +774,12 @@ function renderTable() {
   document.getElementById('s-no-need').textContent = records.filter(r=>r.status==='無需求').length;
 
   function getWeekRange(offset) {
-    const now = new Date(2026, 4, 9);
+    const now = new Date();
     const day = now.getDay() || 7;
     const mon = new Date(now); mon.setDate(now.getDate() - day + 1 + offset*7);
+    mon.setHours(0,0,0,0);
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    sun.setHours(23,59,59,999);
     return { mon, sun };
   }
   function inRange(r, mon, sun) {
