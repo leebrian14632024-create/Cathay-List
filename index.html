@@ -554,7 +554,7 @@
           <div class="appt-section-title">📅 預約資訊</div>
           <div class="form-group">
             <label class="form-label">預約日期</label>
-            <input class="form-input" type="text" id="f-appt-date" placeholder="2026/5/17">
+            <input class="form-input" type="text" id="f-appt-date" placeholder="5/17">
           </div>
           <div class="form-group">
             <label class="form-label">預約時間</label>
@@ -1052,7 +1052,13 @@ function toggleApptField() {
   const fg = document.getElementById('fg-appt');
   if (status === '已預約') {
     fg.classList.add('show');
-    document.getElementById('f-appt-date').focus();
+    const dateInput = document.getElementById('f-appt-date');
+    if (!dateInput.value) {
+      dateInput.value = new Date().getFullYear() + '/';
+    }
+    dateInput.focus();
+    const len = dateInput.value.length;
+    dateInput.setSelectionRange(len, len);
   } else {
     fg.classList.remove('show');
   }
