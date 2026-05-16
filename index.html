@@ -582,8 +582,8 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
 let records = [];
 let editingId = null;
-let sortCol = 'date';
-let sortAsc = false;
+let sortCol = 'dispatch';
+let sortAsc = false; // false = 遞減
 let page = 1;
 const PAGE_SIZE = 50;
 
@@ -732,6 +732,15 @@ function getFiltered() {
       if (ya !== yb) return sortAsc ? ya - yb : yb - ya;
       const [am=0,ad=0] = (a.date||'').split('/').map(Number);
       const [bm=0,bd=0] = (b.date||'').split('/').map(Number);
+      const da = am*100+ad, db = bm*100+bd;
+      return sortAsc ? da - db : db - da;
+    }
+    if (sortCol === 'dispatch') {
+      // ★ 先比年份（遞減），再比派發日（遞減）
+      const ya = parseInt(a.year||0), yb = parseInt(b.year||0);
+      if (ya !== yb) return sortAsc ? ya - yb : yb - ya;
+      const [am=0,ad=0] = (a.dispatch||'').split('/').map(Number);
+      const [bm=0,bd=0] = (b.dispatch||'').split('/').map(Number);
       const da = am*100+ad, db = bm*100+bd;
       return sortAsc ? da - db : db - da;
     }
@@ -962,6 +971,8 @@ async function saveRecord() {
     notes: document.getElementById('f-notes').value.trim(),
     apptDate,   // ★ 預約日期
     apptTime,   // ★ 預約時間
+    // ★ 帶入舊的 eventId（更新時用來刪除舊日曆事件）
+    eventId: editingId ? ((records.find(r=>r.id===editingId)||{}).eventId || '') : '',
   };
 
   const action = editingId ? 'update' : 'add';
@@ -978,18 +989,39 @@ async function saveRecord() {
   const result = await apiCall(action, rec);
   if (result && result.ok) {
     showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
-    // ★ 有預約日期＋時間才同步行事曆
     if (rec.status === '已預約' && rec.apptDate && rec.apptTime) {
-      await syncToCalendar(rec);
+      if (action === 'add') {
+        // ★ 新增：直接建立日曆事件
+        await syncToCalendar(rec);
+      } else {
+        // ★ 更新：先刪舊事件，再建新事件
+        await updateCalendar(rec);
+      }
+    } else if (action === 'update' && rec.eventId) {
+      // ★ 狀態改為非已預約，但原本有日曆事件 → 刪除
+      await apiCall('deleteCalendar', { eventId: rec.eventId, id: rec.id });
     }
   }
 }
 
-// ★ 同步行事曆（使用 apptDate + apptTime）
+// ★ 新增日曆事件
 async function syncToCalendar(rec) {
   const result = await apiCall('addCalendar', rec);
   if (result && result.ok && result.msg === 'calendar_added') {
     showToast('已新增至 Google 行事曆 📅', 'success');
+  }
+}
+
+// ★ 更新日曆事件（刪舊建新）
+async function updateCalendar(rec) {
+  // 先刪除舊的日曆事件
+  if (rec.eventId) {
+    await apiCall('deleteCalendar', { eventId: rec.eventId, id: rec.id });
+  }
+  // 再建立新的日曆事件
+  const result = await apiCall('addCalendar', rec);
+  if (result && result.ok && result.msg === 'calendar_added') {
+    showToast('日曆事件已更新 📅', 'success');
   }
 }
 
