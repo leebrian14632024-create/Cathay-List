@@ -32,7 +32,6 @@
     font-size: 14px;
     line-height: 1.6;
   }
-
   /* HEADER */
   header {
     background: var(--bg2);
@@ -70,7 +69,6 @@
     animation: pulse 2s infinite;
   }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-
   /* STATS BAR */
   .stats-bar {
     background: var(--bg2);
@@ -88,7 +86,6 @@
   }
   .stat-num { font-size: 20px; font-weight: 600; }
   .stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; white-space: nowrap; }
-
   /* TOOLBAR */
   .toolbar {
     padding: 14px 24px;
@@ -147,7 +144,6 @@
     font-weight: 600;
   }
   .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #faf6f0; }
-
   /* TABLE */
   .table-wrap {
     overflow-x: auto;
@@ -156,7 +152,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 900px;
+    min-width: 1050px;
   }
   thead th {
     text-align: left;
@@ -193,7 +189,20 @@
     color: var(--text2);
     font-size: 12px;
   }
-
+  /* ★ 預約欄位樣式 */
+  td.appt-col {
+    white-space: nowrap;
+  }
+  .appt-date {
+    font-size: 12px;
+    color: var(--purple);
+    font-weight: 500;
+  }
+  .appt-time {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 1px;
+  }
   /* STATUS BADGES */
   .badge {
     display: inline-block;
@@ -210,7 +219,6 @@
   .badge-無需求 { background: rgba(224,92,92,.15); color: #e05c5c; border: 1px solid rgba(224,92,92,.25); }
   .badge-空號 { background: rgba(92,90,86,.15); color: var(--text3); border: 1px solid rgba(92,90,86,.25); }
   .badge-default { background: rgba(255,255,255,.06); color: var(--text2); border: 1px solid var(--border); }
-
   /* MODAL */
   .modal-overlay {
     display: none;
@@ -277,6 +285,31 @@
   .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
   .form-textarea { resize: vertical; min-height: 70px; }
   option { background: var(--bg2); }
+  /* ★ 預約欄位在 Modal 中的分隔區塊 */
+  .appt-section {
+    display: none;
+    grid-column: 1 / -1;
+    background: rgba(122,95,170,0.07);
+    border: 1px solid rgba(122,95,170,0.2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    gap: 12px;
+    grid-template-columns: 1fr 1fr;
+  }
+  .appt-section.show { display: grid; }
+  .appt-section .form-label { color: var(--purple); }
+  .appt-section .form-input {
+    border-color: rgba(122,95,170,0.3);
+  }
+  .appt-section .form-input:focus { border-color: var(--purple); }
+  .appt-section-title {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--purple);
+    letter-spacing: .5px;
+    margin-bottom: -4px;
+  }
   .modal-footer {
     padding: 14px 24px 20px;
     display: flex;
@@ -286,7 +319,6 @@
   }
   .btn-danger { background: rgba(224,92,92,.15); border-color: var(--danger); color: var(--danger); }
   .btn-danger:hover { background: var(--danger); color: #fff; }
-
   /* EMPTY */
   .empty-state {
     text-align: center;
@@ -294,7 +326,6 @@
     color: var(--text3);
   }
   .empty-icon { font-size: 36px; margin-bottom: 12px; }
-
   /* TOAST */
   .toast {
     position: fixed;
@@ -315,7 +346,6 @@
   .toast.show { transform: translateY(0); opacity: 1; }
   .toast.success { border-left: 3px solid var(--success); }
   .toast.error { border-left: 3px solid var(--danger); }
-
   /* LOADING */
   #loading-overlay {
     position: fixed;
@@ -337,7 +367,6 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { color: var(--text2); font-size: 13px; }
-
   /* PAGINATION */
   .pagination {
     display: flex;
@@ -362,10 +391,10 @@
   .page-btn:hover { border-color: var(--accent); color: var(--accent); }
   .page-btn.active { background: var(--accent); border-color: var(--accent); color: #faf6f0; font-weight: 600; }
   .page-btn:disabled { opacity: .3; cursor: default; }
-
   @media (max-width: 600px) {
     .stats-bar { gap: 16px; }
     .form-grid { grid-template-columns: 1fr; }
+    .appt-section { grid-template-columns: 1fr; }
     .toolbar { gap: 8px; }
   }
 </style>
@@ -443,6 +472,9 @@
         <th onclick="sortBy('media')">媒體</th>
         <th onclick="sortBy('agent')">跑單</th>
         <th onclick="sortBy('dispatch')">派發日</th>
+        <!-- ★ 新增：拆分後的預約欄 -->
+        <th onclick="sortBy('apptDate')">預約日期 <span id="sort-apptDate"></span></th>
+        <th onclick="sortBy('apptTime')">預約時間 <span id="sort-apptTime"></span></th>
         <th>詳細狀況</th>
         <th></th>
       </tr>
@@ -516,10 +548,20 @@
           <label class="form-label">派發日</label>
           <input class="form-input" type="text" id="f-dispatch" placeholder="5/19">
         </div>
-        <div class="form-group" id="fg-appt" style="display:none">
-          <label class="form-label" style="color:var(--purple)">📅 預約時間</label>
-          <input class="form-input" type="text" id="f-appt" placeholder="5/17 11:00" style="border-color:var(--purple)">
+
+        <!-- ★ 已預約時顯示的區塊，分成「日期」與「時間」兩格 -->
+        <div class="appt-section" id="fg-appt">
+          <div class="appt-section-title">📅 預約資訊</div>
+          <div class="form-group">
+            <label class="form-label">預約日期</label>
+            <input class="form-input" type="text" id="f-appt-date" placeholder="2026/5/17">
+          </div>
+          <div class="form-group">
+            <label class="form-label">預約時間</label>
+            <input class="form-input" type="time" id="f-appt-time">
+          </div>
         </div>
+
         <div class="form-group full">
           <label class="form-label">詳細狀況 / 備註</label>
           <textarea class="form-textarea" id="f-notes" placeholder="填入備註…"></textarea>
@@ -545,6 +587,14 @@ let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
 
+// ★ 舊 appt 欄位（"5/17 11:00"）向後相容：拆成 date + time
+function parseApptLegacy(appt) {
+  if (!appt) return { date: '', time: '' };
+  const m = appt.match(/^(.+?)\s+(\d{1,2}:\d{2})$/);
+  if (m) return { date: m[1].trim(), time: m[2].trim() };
+  return { date: appt.trim(), time: '' };
+}
+
 // ─── GOOGLE SHEETS API ───
 async function loadData() {
   setSyncStatus('loading');
@@ -552,7 +602,15 @@ async function loadData() {
     const res = await fetch(API_URL);
     const json = await res.json();
     if (json.ok) {
-      records = json.data.filter(r => r.name);
+      records = json.data.filter(r => r.name).map(r => {
+        // ★ 向後相容：若後端還是回傳舊的 appt 欄位，自動拆分
+        if (r.appt && !r.apptDate && !r.apptTime) {
+          const parsed = parseApptLegacy(r.appt);
+          r.apptDate = parsed.date;
+          r.apptTime = parsed.time;
+        }
+        return r;
+      });
       setSyncStatus('ok');
     } else {
       throw new Error('API error');
@@ -596,68 +654,6 @@ function setSyncStatus(state) {
   }
 }
 
-// ─── SEED DATA (from Excel) ───
-function getSeedData() {
-  const raw = [
-    ['2025/12/19','郭','0912903759','新竹','待確認','官網','3/2傳訊息再約','席育慧','2025/5/16'],
-    ['2025/12/23','王小姐','0928934926','臺中市','已來訪','官網','5/30已來訪，郁涵協助','林姍珊','2025/5/16'],
-    ['2025/12/24','杜明哲','0955904082','臺中市','待確認','官網','與父母同住，說服中','賴郁涵','2025/5/16'],
-    ['2025/12/25','邱柏瑞','0923586687','臺中市','無需求','官網','2/18、5/10重複留單/沒有再看房了','蘇宥安','2025/5/16'],
-    ['2025/12/27','洪瑞君','0918642275','臺中市','待確認','官網','樣品屋完成再約','林姍珊','2025/5/16'],
-    ['2025/12/27','林宗炫','0975206706','臺中市','未接','官網','','席育慧','2025/5/16'],
-    ['2025/12/27','林先生','0916155997','臺中市','未接','官網','6/16語音','蘇宥安','2025/5/16'],
-    ['2025/12/27','黃偉婷','0983353575','臺中市','未接','官網','','林姍珊','2025/5/16'],
-    ['2025/12/27','張家橋','0919088583','臺中市','無需求','官網','已買','席育慧','2025/5/16'],
-    ['2025/12/27','張昆樺','0972501198','臺中市','無需求','官網','已置房','蘇宥安','2025/5/16'],
-    ['2025/12/27','魏均寰','0973328969','南投縣','已來訪','官網','5/31已來訪','林姍珊','2025/5/16'],
-    ['2025/12/27','許倍榮','0919821451','新竹縣','已來訪','官網','8/23已來訪','賴郁涵','2025/5/16'],
-    ['2025/12/27','張毓珊','0921391433','臺中市','待確認','官網','有樣品屋,再聯繫','蘇宥安','2025/5/16'],
-    ['2025/12/27','吳家淇','0921477657','臺中市','已來訪','官網','','林姍珊','2025/5/16'],
-    ['2025/12/27','蘇俊豪','0928908930','臺中市','已來訪','官網','6/7已來訪','賴郁涵','2025/5/16'],
-    ['2025/12/27','莊先生','0928629270','臺中市','未接','官網','語音','蘇宥安','2025/5/16'],
-    ['2025/12/27','林廷勳','0928647853','臺中市','未接','官網','','席育慧','2025/5/16'],
-    ['2025/12/27','陳靖方','0900213888','彰化縣','待確認','官網','想想時間回覆','賴郁涵','2025/5/16'],
-    ['2025/12/27','陳伯龍','0930116660','臺北市','無需求','官網','沒有再看房了','蘇宥安','2025/5/16'],
-    ['2025/12/27','張文彥','0938006180','臺中市','待確認','官網','本週回宜蘭之後再看看','林姍珊','2025/5/16'],
-    ['2025/12/27','林昆立','0918907325','臺中市','已來訪','官網','5/21已來訪','賴郁涵','2025/5/16'],
-    ['2025/12/27','柯雁云','0988759892','高雄市','空號','官網','','蘇宥安','2025/5/16'],
-    ['2025/12/27','周暘淯','0917297528','臺中市','未接','官網','','席育慧','2025/5/16'],
-    ['2025/12/27','鄭詠守','0952458223','新竹縣','無需求','官網','無需求','','2025/5/16'],
-    ['2025/12/27','林忠信','0910030111','臺中市','已來訪','官網','5/26已來訪 郁涵協助','蘇宥安','2025/5/16'],
-    ['2025/12/27','江虹儀','0919080905','臺中市','已來訪','官網','5/31已來訪','林姍珊','2025/5/16'],
-    ['2025/12/27','余小姐','0903326620','臺中市','未接','官網','','賴郁涵','2025/5/16'],
-    ['2025/12/27','鄧煒立','0917540830','彰化縣','無需求','官網','2/27重複留單/不考慮這區','蘇宥安','2025/5/16'],
-    ['2025/12/27','許博陞','0981320837','臺中市','已來訪','官網','5/21已來訪，宥安協助','林姍珊','2025/5/16'],
-    ['2025/12/27','張埕語','0932603610','彰化縣','未接','官網','','賴郁涵','2025/5/16'],
-    ['2025/12/27','陳量寬','0928256731','臺北市','待確認','官網','傳訊息再約','席育慧','2025/5/16'],
-    ['2025/12/27','江子群','0975799380','新竹縣','待確認','官網','確認時間後回覆','林姍珊','2025/5/16'],
-    ['2025/12/27','劉麗容','0910152432','','未接','官網','','賴郁涵','2025/5/16'],
-    ['2025/12/27','賴','0900234658','臺中市','未接','官網','','席育慧','2025/5/16'],
-    ['2025/12/27','吳正洲','0928636836','','無需求','官網','無需求','林姍珊','2025/5/16'],
-    ['2025/12/27','李定綸','0911851788','臺中市','未接','官網','','賴郁涵','2025/5/16'],
-    ['2025/12/27','尹先生','0952366950','臺中市','已來訪','官網','預約6/21(六)10:30','蘇宥安','2025/5/16'],
-    ['2025/12/27','梁先生','0912135538','臺中市','未接','官網','重複留單','林姍珊','2025/5/16'],
-    ['2025/12/27','蘇亮福','0902277219','臺中市','未接','官網','','席育慧','2025/5/16'],
-    ['2025/12/27','王太太','0903703207','臺中市','無需求','官網','沒有再看房了','蘇宥安','2025/5/16'],
-    ['2025/12/27','黃誠頤','0986840623','新竹縣','未接','官網','傳訊息','林姍珊','2025/5/16'],
-    ['2025/12/27','劉騏安','0932667982','臺中市','未接','官網','','賴郁涵','2025/5/16'],
-    ['2025/12/27','楊建軒','0952373365','臺中市','無需求','官網','沒有再看房了','蘇宥安','2025/5/16'],
-    ['2025/12/27','李彥霆','0928979708','臺中市','已來訪','官網','5/23已來訪','林姍珊','2025/5/16'],
-    ['2025/12/28','吳羽穎','0939619008','臺中市','已來訪','官網','5/22已來訪，宥安協助','賴郁涵','2025/5/16'],
-    ['2025/12/28','廖俊閔','0918868358','新竹縣','已來訪','官網','5/31已來訪','蘇宥安','2025/5/16'],
-    ['2025/12/28','袁聲揚','0989025507','臺中市','已預約','官網','預約6/4 15:00','林姍珊','2025/5/16'],
-    ['2025/12/28','張嘉玲','0911071768','臺中市','未接','官網','','席育慧','2025/5/16'],
-    ['2025/12/28','Vicky','0980541731','臺中市','待確認','官網','有價格，樣品屋再通知','蘇宥安','2025/5/16'],
-    ['2025/12/28','林佳以','0978586913','臺中市','待確認','官網','再與家人商量','林姍珊','2025/5/16'],
-    ['2025/12/28','凃淑雯','0912760073','臺中市','無需求','官網','暫時不購屋','賴郁涵','2025/5/16'],
-  ];
-  return raw.map((r, i) => ({
-    id: 'seed_' + i,
-    date: r[0], name: r[1], phone: r[2], region: r[3],
-    status: r[4], media: r[5], notes: r[6], agent: r[7], dispatch: r[8]
-  }));
-}
-
 // ─── FILTER & SORT ───
 function getFiltered() {
   const q = document.getElementById('search').value.toLowerCase();
@@ -666,7 +662,6 @@ function getFiltered() {
   const fMedia = document.getElementById('f-media').value;
   const fDate = document.getElementById('f-date').value;
   const fYear = document.getElementById('f-year-filter').value;
-
   return records.filter(r => {
     if (q && !`${r.name}${r.phone}${r.notes}${r.region}${r.agent}`.toLowerCase().includes(q)) return false;
     if (fStatus && r.status !== fStatus) return false;
@@ -678,7 +673,6 @@ function getFiltered() {
   }).sort((a, b) => {
     let av = a[sortCol] || '', bv = b[sortCol] || '';
     if (sortCol === 'date') {
-      // Sort by year then date numerically
       const ya = parseInt(a.year||0), yb = parseInt(b.year||0);
       if (ya !== yb) return sortAsc ? ya - yb : yb - ya;
       const [am=0,ad=0] = (a.date||'').split('/').map(Number);
@@ -724,9 +718,8 @@ function renderTable() {
   document.getElementById('s-missed').textContent = records.filter(r=>r.status==='未接').length;
   document.getElementById('s-no-need').textContent = records.filter(r=>r.status==='無需求').length;
 
-  // Weekly stats
   function getWeekRange(offset) {
-    const now = new Date(2026, 4, 9); // 2026/5/9
+    const now = new Date(2026, 4, 9);
     const day = now.getDay() || 7;
     const mon = new Date(now); mon.setDate(now.getDate() - day + 1 + offset*7);
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
@@ -744,31 +737,40 @@ function renderTable() {
   document.getElementById('s-week').textContent = records.filter(r => inRange(r, thisWeek.mon, thisWeek.sun)).length;
   document.getElementById('s-lastweek').textContent = records.filter(r => inRange(r, lastWeek.mon, lastWeek.sun)).length;
 
-  // Dropdowns
   populateFilters();
 
-  // Table
   const tbody = document.getElementById('tbody');
   if (slice.length === 0) {
     tbody.innerHTML = '';
     document.getElementById('empty-state').style.display = 'block';
   } else {
     document.getElementById('empty-state').style.display = 'none';
-    tbody.innerHTML = slice.map(r => `
-      <tr onclick="openModal('${r.id}')">
-        <td style="color:var(--text3);font-size:12px">${r.year || '—'}</td>
-        <td style="color:var(--text2);font-size:12px">${r.date || '—'}</td>
-        <td style="font-weight:500">${esc(r.name)}</td>
-        <td style="font-family:monospace;color:var(--text2)">${esc(r.phone)}</td>
-        <td style="color:var(--text2)">${esc(r.region)}</td>
-        <td>${badgeHtml(r.status)}</td>
-        <td style="color:var(--text2)">${esc(r.media)}</td>
-        <td style="color:var(--text2)">${esc(r.agent)}</td>
-        <td style="color:var(--text2);font-size:12px">${esc(r.dispatch)}</td>
-        <td class="notes-col" title="${esc(r.notes)}">${esc(r.notes)}</td>
-        <td style="width:24px;text-align:center;color:var(--text3);font-size:16px">›</td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = slice.map(r => {
+      // ★ 預約欄：日期與時間分兩行顯示
+      const apptCell = (r.apptDate || r.apptTime)
+        ? `<div class="appt-date">${esc(r.apptDate)}</div><div class="appt-time">${esc(r.apptTime)}</div>`
+        : '<span style="color:var(--text3)">—</span>';
+
+      return `
+        <tr onclick="openModal('${r.id}')">
+          <td style="color:var(--text3);font-size:12px">${r.year || '—'}</td>
+          <td style="color:var(--text2);font-size:12px">${r.date || '—'}</td>
+          <td style="font-weight:500">${esc(r.name)}</td>
+          <td style="font-family:monospace;color:var(--text2)">${esc(r.phone)}</td>
+          <td style="color:var(--text2)">${esc(r.region)}</td>
+          <td>${badgeHtml(r.status)}</td>
+          <td style="color:var(--text2)">${esc(r.media)}</td>
+          <td style="color:var(--text2)">${esc(r.agent)}</td>
+          <td style="color:var(--text2);font-size:12px">${esc(r.dispatch)}</td>
+          <!-- ★ 拆分後的預約日期欄 -->
+          <td class="appt-col">${apptCell}</td>
+          <!-- ★ 預約時間欄（table 裡合併顯示，可視需求拆開） -->
+          <td style="display:none"></td>
+          <td class="notes-col" title="${esc(r.notes)}">${esc(r.notes)}</td>
+          <td style="width:24px;text-align:center;color:var(--text3);font-size:16px">›</td>
+        </tr>
+      `;
+    }).join('');
   }
 
   // Pagination
@@ -783,7 +785,7 @@ function renderTable() {
   pbDiv.innerHTML = btns;
 
   // Sort indicators
-  ['year','date','name','phone','region','status','media','agent','dispatch'].forEach(c => {
+  ['year','date','name','phone','region','status','media','agent','dispatch','apptDate','apptTime'].forEach(c => {
     const el = document.getElementById('sort-'+c);
     if (el) el.textContent = sortCol===c ? (sortAsc?'↑':'↓') : '';
   });
@@ -805,8 +807,8 @@ function populateFilters() {
     return (parseInt(by)||0)*10000+(bm||0)*100+(bdm||0) - ((parseInt(ay)||0)*10000+(am||0)*100+(adm||0));
   }).map(x => x.split('|')[1]);
   const regions = [...new Set(records.map(r=>r.region).filter(Boolean))].sort();
-
   const years = [...new Set(records.map(r=>r.year).filter(Boolean))].sort().reverse();
+
   const fyEl = document.getElementById('f-year-filter');
   const curY = fyEl.value;
   fyEl.innerHTML = '<option value="">全部年份</option>' + years.map(y=>`<option ${y===curY?'selected':''}>${y}</option>`).join('');
@@ -823,7 +825,6 @@ function populateFilters() {
   const curD = fd.value;
   fd.innerHTML = '<option value="">全部日期</option>' + dates.map(d=>`<option ${d===curD?'selected':''}>${d}</option>`).join('');
 
-  // Datalists in modal
   document.getElementById('agent-list').innerHTML = agents.map(a=>`<option value="${a}">`).join('');
   document.getElementById('media-list').innerHTML = medias.map(m=>`<option value="${m}">`).join('');
   document.getElementById('region-list').innerHTML = regions.map(r=>`<option value="${r}">`).join('');
@@ -833,7 +834,6 @@ function badgeHtml(status) {
   const cls = ['待確認','未接','已來訪','已預約','無需求','空號'].includes(status) ? 'badge-'+status : 'badge-default';
   return `<span class="badge ${cls}">${esc(status)||'—'}</span>`;
 }
-
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ─── MODAL ───
@@ -841,7 +841,6 @@ function openModal(id) {
   editingId = id || null;
   const modal = document.getElementById('modal');
   const del = document.getElementById('btn-delete');
-
   if (id) {
     const r = records.find(x=>x.id===id);
     if (!r) return;
@@ -852,8 +851,10 @@ function openModal(id) {
     document.getElementById('f-phone').value = r.phone || '';
     document.getElementById('f-region').value = r.region || '';
     document.getElementById('f-contact-status').value = r.status || '';
-    document.getElementById('f-appt').value = r.appt || '';
-    document.getElementById('fg-appt').style.display = r.status === '已預約' ? '' : 'none';
+    // ★ 分開填入日期與時間
+    document.getElementById('f-appt-date').value = r.apptDate || '';
+    document.getElementById('f-appt-time').value = r.apptTime || '';
+    document.getElementById('fg-appt').classList.toggle('show', r.status === '已預約');
     document.getElementById('f-media-input').value = r.media || '';
     document.getElementById('f-agent-input').value = r.agent || '';
     document.getElementById('f-dispatch').value = r.dispatch || '';
@@ -861,18 +862,20 @@ function openModal(id) {
     del.style.display = '';
   } else {
     document.getElementById('modal-title').textContent = '新增聯絡人';
-    const today = new Date().toISOString().split('T')[0];
     document.getElementById('f-year').value = new Date().getFullYear();
     document.getElementById('f-date-input').value = '';
     document.getElementById('f-name').value = '';
     document.getElementById('f-phone').value = '';
     document.getElementById('f-region').value = '臺中市';
     document.getElementById('f-contact-status').value = '待確認';
-    document.getElementById('f-appt').value = '';
-    document.getElementById('fg-appt').style.display = 'none';
+    // ★ 清空兩個欄位
+    document.getElementById('f-appt-date').value = '';
+    document.getElementById('f-appt-time').value = '';
+    document.getElementById('fg-appt').classList.remove('show');
     document.getElementById('f-media-input').value = '官網';
     document.getElementById('f-agent-input').value = '';
-    document.getElementById('f-dispatch').value = today;
+    const today = new Date();
+    document.getElementById('f-dispatch').value = (today.getMonth()+1) + '/' + today.getDate();
     document.getElementById('f-notes').value = '';
     del.style.display = 'none';
   }
@@ -887,27 +890,29 @@ function closeModal() {
 
 async function saveRecord() {
   const name = document.getElementById('f-name').value.trim();
-  const phone = document.getElementById('f-phone').value.trim();
   if (!name) { showToast('請填入姓名', 'error'); return; }
+
+  // ★ 讀取拆分後的預約日期與時間
+  const apptDate = document.getElementById('f-appt-date').value.trim();
+  const apptTime = document.getElementById('f-appt-time').value.trim();
 
   const rec = {
     id: editingId || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2,6)),
     year: document.getElementById('f-year').value,
     date: document.getElementById('f-date-input').value,
     name,
-    phone,
+    phone: document.getElementById('f-phone').value.trim(),
     region: document.getElementById('f-region').value.trim(),
     status: document.getElementById('f-contact-status').value,
     media: document.getElementById('f-media-input').value.trim(),
     agent: document.getElementById('f-agent-input').value.trim(),
     dispatch: document.getElementById('f-dispatch').value,
     notes: document.getElementById('f-notes').value.trim(),
-    appt: document.getElementById('f-appt').value.trim(),
+    apptDate,   // ★ 預約日期
+    apptTime,   // ★ 預約時間
   };
 
   const action = editingId ? 'update' : 'add';
-
-  // Optimistic update
   if (editingId) {
     const idx = records.findIndex(r=>r.id===editingId);
     if (idx >= 0) records[idx] = rec;
@@ -921,10 +926,18 @@ async function saveRecord() {
   const result = await apiCall(action, rec);
   if (result && result.ok) {
     showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
-    // Auto-add to Google Calendar if 已預約 and has appt time
-    if (rec.status === '已預約' && rec.appt) {
+    // ★ 有預約日期＋時間才同步行事曆
+    if (rec.status === '已預約' && rec.apptDate && rec.apptTime) {
       await syncToCalendar(rec);
     }
+  }
+}
+
+// ★ 同步行事曆（使用 apptDate + apptTime）
+async function syncToCalendar(rec) {
+  const result = await apiCall('addCalendar', rec);
+  if (result && result.ok && result.msg === 'calendar_added') {
+    showToast('已新增至 Google 行事曆 📅', 'success');
   }
 }
 
@@ -945,9 +958,11 @@ async function deleteRecord() {
 // ─── EXPORT ───
 function exportCSV() {
   const filtered = getFiltered();
-  const headers = ['日期','姓名','電話','區域','聯絡狀況','媒體','跑單','派發日','詳細狀況'];
+  // ★ 匯出時包含預約日期與預約時間兩欄
+  const headers = ['日期','姓名','電話','區域','聯絡狀況','媒體','跑單','派發日','預約日期','預約時間','詳細狀況'];
   const rows = filtered.map(r => [
-    r.date,r.name,r.phone,r.region,r.status,r.media,r.agent,r.dispatch,r.notes
+    r.date,r.name,r.phone,r.region,r.status,r.media,r.agent,r.dispatch,
+    r.apptDate,r.apptTime,r.notes
   ].map(v => `"${(v||'').replace(/"/g,'""')}"`));
   const csv = '\uFEFF' + [headers, ...rows].map(r=>r.join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
@@ -974,7 +989,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderTable();
   document.getElementById('loading-overlay').style.display = 'none';
   showToast('名單已載入，共 ' + records.length + ' 筆', 'success');
-  // 每3分鐘自動刷新
   setInterval(async () => {
     await loadData();
     renderTable();
@@ -982,19 +996,18 @@ window.addEventListener('DOMContentLoaded', async () => {
   }, 3 * 60 * 1000);
 });
 
-// Show/hide 預約時間 field based on status
+// ★ 聯絡狀況切換：「已預約」才顯示預約日期＋時間區塊
 function toggleApptField() {
   const status = document.getElementById('f-contact-status').value;
   const fg = document.getElementById('fg-appt');
   if (status === '已預約') {
-    fg.style.display = '';
-    document.getElementById('f-appt').focus();
+    fg.classList.add('show');
+    document.getElementById('f-appt-date').focus();
   } else {
-    fg.style.display = 'none';
+    fg.classList.remove('show');
   }
 }
 
-// Auto-fill dispatch date when agent is entered
 function autoFillDispatch() {
   const agent = document.getElementById('f-agent-input').value.trim();
   const dispatch = document.getElementById('f-dispatch');
@@ -1004,7 +1017,6 @@ function autoFillDispatch() {
   }
 }
 
-// Keyboard shortcut
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
   if ((e.metaKey||e.ctrlKey) && e.key==='n') { e.preventDefault(); openModal(); }
