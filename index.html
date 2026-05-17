@@ -1110,15 +1110,43 @@ window.addEventListener('DOMContentLoaded', async () => {
     };
 
     // ★ 插入精簡搜尋列（只有搜尋框 + 狀態篩選）
-    document.querySelector('.toolbar').insertAdjacentHTML('afterend',
-      '<div style="padding:10px 24px;display:flex;gap:10px;align-items:center;background:var(--bg);border-bottom:1px solid var(--border);">' +
-      '<input class="search-box" type="text" id="search-agent" placeholder="搜尋姓名、電話、備註…" oninput="document.getElementById(&apos;search&apos;).value=this.value;renderTable()" style="flex:1;min-width:200px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px;outline:none;font-family:inherit;">' +
-      '<select class="filter" id="f-status-agent" onchange="document.getElementById(&apos;f-status&apos;).value=this.value;renderTable()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;cursor:pointer;font-family:inherit;">' +
-      '<option value="">全部狀況</option><option>待確認</option><option>未接</option><option>已來訪</option><option>已預約</option><option>無需求</option><option>空號</option>' +
-      '</select>' +
-      '<span style="font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;">👤 ' + agentParam + ' 的名單</span>' +
-      '</div>'
-    );
+    // 插入精簡搜尋列
+    const agentBar = document.createElement('div');
+    agentBar.style.cssText = 'padding:10px 24px;display:flex;gap:10px;align-items:center;background:var(--bg);border-bottom:1px solid var(--border);';
+    
+    const searchInput = document.createElement('input');
+    searchInput.className = 'search-box';
+    searchInput.type = 'text';
+    searchInput.id = 'search-agent';
+    searchInput.placeholder = '搜尋姓名、電話、備註…';
+    searchInput.style.cssText = 'flex:1;min-width:200px;';
+    searchInput.addEventListener('input', function() {
+      document.getElementById('search').value = this.value;
+      renderTable();
+    });
+    
+    const statusSel = document.createElement('select');
+    statusSel.className = 'filter';
+    statusSel.id = 'f-status-agent';
+    ['', '待確認', '未接', '已來訪', '已預約', '無需求', '空號'].forEach(function(v) {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v || '全部狀況';
+      statusSel.appendChild(opt);
+    });
+    statusSel.addEventListener('change', function() {
+      document.getElementById('f-status').value = this.value;
+      renderTable();
+    });
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;';
+    nameSpan.textContent = '👤 ' + agentParam + ' 的名單';
+    
+    agentBar.appendChild(searchInput);
+    agentBar.appendChild(statusSel);
+    agentBar.appendChild(nameSpan);
+    document.querySelector('.toolbar').insertAdjacentElement('afterend', agentBar);
   }
   if (statusParam) document.getElementById('f-status').value = statusParam;
   if (mediaParam) document.getElementById('f-media').value = mediaParam;
