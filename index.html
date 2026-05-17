@@ -144,14 +144,7 @@
     font-weight: 600;
   }
   .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #faf6f0; }
-  .btn-notify {
-    background: var(--success);
-    border-color: var(--success);
-    color: #fff;
-    font-weight: 600;
-  }
-  .btn-notify:hover { background: #4a7a5a; border-color: #4a7a5a; color: #fff; }
-  .btn-notify:disabled { opacity: .6; cursor: default; }
+
   /* TABLE */
   .table-wrap {
     overflow-x: auto;
@@ -391,7 +384,6 @@
     .appt-section { grid-template-columns: 1fr; }
     .toolbar { gap: 8px; }
     .header-right { gap: 8px; }
-    .btn-notify { padding: 7px 10px; font-size: 12px; }
   }
 </style>
 
@@ -421,7 +413,6 @@
       <div class="sync-dot" id="sync-dot" style="background:var(--warn)"></div>
       <span id="sync-label">連接中…</span>
     </div>
-    <button class="btn btn-notify" id="btn-notify" onclick="notifyDispatch()">📢 通知跑單</button>
     <button class="btn btn-primary" onclick="openModal()">＋ 新增名單</button>
   </div>
 </header>
@@ -690,22 +681,6 @@ function setSyncStatus(state) {
   } else {
     dot.style.background = 'var(--danger)';
     label.textContent = '連線失敗';
-  }
-}
-
-// ─── 管理員通知跑單 ───
-async function notifyDispatch() {
-  const btn = document.getElementById('btn-notify');
-  if (!confirm('確認發送今日名單通知給跑單業務？')) return;
-  btn.disabled = true;
-  btn.textContent = '發送中…';
-  const result = await apiCall('notifyDispatch', {});
-  btn.disabled = false;
-  btn.textContent = '📢 通知跑單';
-  if (result && result.ok) {
-    showToast('✅ 已通知所有跑單業務！', 'success');
-  } else {
-    showToast('發送失敗，請重試', 'error');
   }
 }
 
@@ -1063,12 +1038,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (agentParam) {
     document.getElementById('f-agent').value = agentParam;
     document.querySelector('.toolbar').style.display = 'none';
-
-    // 業務模式：隱藏統計列
-    document.getElementById('stats-bar').style.display = 'none';
-
-    // 業務模式：隱藏「通知跑單」按鈕
-    document.getElementById('btn-notify').style.display = 'none';
 
     window.clearFilters = function() {
       document.getElementById('search').value = '';
