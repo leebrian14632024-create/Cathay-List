@@ -1087,7 +1087,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   const statusParam = urlParams.get('status');
   const mediaParam = urlParams.get('media');
 
+  // ★ 先跑一次 renderTable 讓 populateFilters 填好下拉選單
+  renderTable();
+
   if (agentParam) {
+    // 此時選單已有選項，可以正確設定值
     document.getElementById('f-agent').value = agentParam;
 
     // ★ 完全隱藏整個篩選工具列（業務無法自行更改）
@@ -1119,6 +1123,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (statusParam) document.getElementById('f-status').value = statusParam;
   if (mediaParam) document.getElementById('f-media').value = mediaParam;
 
+  // ★ 套用參數後再跑一次，確保篩選生效
   renderTable();
   document.getElementById('loading-overlay').style.display = 'none';
   showToast('名單已載入，共 ' + records.length + ' 筆', 'success');
