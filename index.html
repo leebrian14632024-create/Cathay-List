@@ -417,7 +417,17 @@
   </div>
 </header>
 
-
+<div class="stats-bar" id="stats-bar">
+  <div class="stat"><div class="stat-num" id="s-total" style="color:var(--accent)">—</div><div class="stat-label">全部名單</div></div>
+  <div class="stat"><div class="stat-num" id="s-visited" style="color:var(--success)">—</div><div class="stat-label">已來訪</div></div>
+  <div class="stat"><div class="stat-num" id="s-reserved" style="color:var(--purple)">—</div><div class="stat-label">已預約</div></div>
+  <div class="stat"><div class="stat-num" id="s-pending" style="color:var(--info)">—</div><div class="stat-label">待確認</div></div>
+  <div class="stat"><div class="stat-num" id="s-missed" style="color:var(--warn)">—</div><div class="stat-label">未接</div></div>
+  <div class="stat"><div class="stat-num" id="s-no-need" style="color:var(--danger)">—</div><div class="stat-label">無需求</div></div>
+  <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
+  <div class="stat"><div class="stat-num" id="s-week" style="color:var(--accent)">—</div><div class="stat-label">本週新增</div></div>
+  <div class="stat"><div class="stat-num" id="s-lastweek" style="color:var(--text2)">—</div><div class="stat-label">上週名單</div></div>
+</div>
 
 <div class="toolbar">
   <input class="search-box" type="text" id="search" placeholder="搜尋姓名、電話、備註…" oninput="renderTable()">
@@ -738,33 +748,36 @@ function renderTable() {
   if (page > totalPages) page = totalPages;
   const slice = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
-  document.getElementById('s-total').textContent = records.length;
-  document.getElementById('s-visited').textContent = records.filter(r=>r.status==='已來訪').length;
-  document.getElementById('s-reserved').textContent = records.filter(r=>r.status==='已預約').length;
-  document.getElementById('s-pending').textContent = records.filter(r=>r.status==='待確認').length;
-  document.getElementById('s-missed').textContent = records.filter(r=>r.status==='未接').length;
-  document.getElementById('s-no-need').textContent = records.filter(r=>r.status==='無需求').length;
-
-  function getWeekRange(offset) {
-    const now = new Date();
-    const day = now.getDay() || 7;
-    const mon = new Date(now); mon.setDate(now.getDate() - day + 1 + offset*7);
-    mon.setHours(0,0,0,0);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    sun.setHours(23,59,59,999);
-    return { mon, sun };
+  // 統計數字（管理員模式才有這些元素）
+  const sTotal = document.getElementById('s-total');
+  if (sTotal) {
+    sTotal.textContent = records.length;
+    document.getElementById('s-visited').textContent = records.filter(r=>r.status==='已來訪').length;
+    document.getElementById('s-reserved').textContent = records.filter(r=>r.status==='已預約').length;
+    document.getElementById('s-pending').textContent = records.filter(r=>r.status==='待確認').length;
+    document.getElementById('s-missed').textContent = records.filter(r=>r.status==='未接').length;
+    document.getElementById('s-no-need').textContent = records.filter(r=>r.status==='無需求').length;
+    function getWeekRange(offset) {
+      const now = new Date();
+      const day = now.getDay() || 7;
+      const mon = new Date(now); mon.setDate(now.getDate() - day + 1 + offset*7);
+      mon.setHours(0,0,0,0);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      sun.setHours(23,59,59,999);
+      return { mon, sun };
+    }
+    function inRange(r, mon, sun) {
+      const parts = (r.date||'').split('/');
+      if (parts.length < 2) return false;
+      const yr = parseInt(r.year) || 2025;
+      const d = new Date(yr, parseInt(parts[0])-1, parseInt(parts[1]));
+      return d >= mon && d <= sun;
+    }
+    const thisWeek = getWeekRange(0);
+    const lastWeek = getWeekRange(-1);
+    document.getElementById('s-week').textContent = records.filter(r => inRange(r, thisWeek.mon, thisWeek.sun)).length;
+    document.getElementById('s-lastweek').textContent = records.filter(r => inRange(r, lastWeek.mon, lastWeek.sun)).length;
   }
-  function inRange(r, mon, sun) {
-    const parts = (r.date||'').split('/');
-    if (parts.length < 2) return false;
-    const yr = parseInt(r.year) || 2025;
-    const d = new Date(yr, parseInt(parts[0])-1, parseInt(parts[1]));
-    return d >= mon && d <= sun;
-  }
-  const thisWeek = getWeekRange(0);
-  const lastWeek = getWeekRange(-1);
-  document.getElementById('s-week').textContent = records.filter(r => inRange(r, thisWeek.mon, thisWeek.sun)).length;
-  document.getElementById('s-lastweek').textContent = records.filter(r => inRange(r, lastWeek.mon, lastWeek.sun)).length;
 
   populateFilters();
 
@@ -1028,6 +1041,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (agentParam) {
     document.getElementById('f-agent').value = agentParam;
     document.querySelector('.toolbar').style.display = 'none';
+    // 業務模式：隱藏統計數字列
+    document.getElementById('stats-bar').style.display = 'none';
 
     window.clearFilters = function() {
       document.getElementById('search').value = '';
