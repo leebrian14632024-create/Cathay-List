@@ -1195,15 +1195,5 @@ document.addEventListener('keydown', e => {
 });
 </script>
 
-<script>
-// ★ 註冊 Service Worker（PWA 離線支援）
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/Cathay-List/sw.js')
-      .then(reg => console.log('SW 已註冊:', reg.scope))
-      .catch(err => console.log('SW 註冊失敗:', err));
-  });
-}
-</script>
 </body>
 </html>
