@@ -398,6 +398,16 @@
     .toolbar { gap: 8px; }
   }
 </style>
+
+<!-- PWA 設定 -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="蒔萃名單">
+<meta name="theme-color" content="#8b6340">
+<!-- Apple Touch Icon（沒有 icon 檔案時用 SVG 當佔位） -->
+<link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
 
@@ -1070,6 +1080,45 @@ function showToast(msg, type='success') {
 window.addEventListener('DOMContentLoaded', async () => {
   setSyncStatus('loading');
   await loadData();
+
+  // ★ 讀取網址參數，自動套用篩選
+  const urlParams = new URLSearchParams(window.location.search);
+  const agentParam = urlParams.get('agent');
+  const statusParam = urlParams.get('status');
+  const mediaParam = urlParams.get('media');
+
+  if (agentParam) {
+    document.getElementById('f-agent').value = agentParam;
+
+    // ★ 完全隱藏整個篩選工具列（業務無法自行更改）
+    document.querySelector('.toolbar').style.display = 'none';
+
+    // ★ 覆寫 clearFilters，讓清除篩選無法清掉 agent
+    window.clearFilters = function() {
+      document.getElementById('search').value = '';
+      document.getElementById('f-status').value = '';
+      document.getElementById('f-media').value = '';
+      document.getElementById('f-date').value = '';
+      document.getElementById('f-year-filter').value = '';
+      // ★ 不清 f-agent，確保業務鎖定
+      page = 1;
+      renderTable();
+    };
+
+    // ★ 插入精簡搜尋列（只有搜尋框 + 狀態篩選）
+    document.querySelector('.toolbar').insertAdjacentHTML('afterend',
+      '<div style="padding:10px 24px;display:flex;gap:10px;align-items:center;background:var(--bg);border-bottom:1px solid var(--border);">' +
+      '<input class="search-box" type="text" id="search-agent" placeholder="搜尋姓名、電話、備註…" oninput="document.getElementById('search').value=this.value;renderTable()" style="flex:1;min-width:200px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px;outline:none;font-family:inherit;">' +
+      '<select class="filter" id="f-status-agent" onchange="document.getElementById('f-status').value=this.value;renderTable()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;cursor:pointer;font-family:inherit;">' +
+      '<option value="">全部狀況</option><option>待確認</option><option>未接</option><option>已來訪</option><option>已預約</option><option>無需求</option><option>空號</option>' +
+      '</select>' +
+      '<span style="font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;">👤 ' + agentParam + ' 的名單</span>' +
+      '</div>'
+    );
+  }
+  if (statusParam) document.getElementById('f-status').value = statusParam;
+  if (mediaParam) document.getElementById('f-media').value = mediaParam;
+
   renderTable();
   document.getElementById('loading-overlay').style.display = 'none';
   showToast('名單已載入，共 ' + records.length + ' 筆', 'success');
@@ -1111,6 +1160,17 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
   if ((e.metaKey||e.ctrlKey) && e.key==='n') { e.preventDefault(); openModal(); }
 });
+</script>
+
+<script>
+// ★ 註冊 Service Worker（PWA 離線支援）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/Cathay-List/sw.js')
+      .then(reg => console.log('SW 已註冊:', reg.scope))
+      .catch(err => console.log('SW 註冊失敗:', err));
+  });
+}
 </script>
 </body>
 </html>
