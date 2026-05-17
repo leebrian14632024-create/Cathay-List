@@ -144,6 +144,14 @@
     font-weight: 600;
   }
   .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #faf6f0; }
+  .btn-notify {
+    background: var(--success);
+    border-color: var(--success);
+    color: #fff;
+    font-weight: 600;
+  }
+  .btn-notify:hover { background: #4a7a5a; border-color: #4a7a5a; color: #fff; }
+  .btn-notify:disabled { opacity: .6; cursor: default; }
   /* TABLE */
   .table-wrap {
     overflow-x: auto;
@@ -189,20 +197,9 @@
     color: var(--text2);
     font-size: 12px;
   }
-  /* ★ 預約欄位樣式 */
-  td.appt-col {
-    white-space: nowrap;
-  }
-  .appt-date {
-    font-size: 12px;
-    color: var(--purple);
-    font-weight: 500;
-  }
-  .appt-time {
-    font-size: 11px;
-    color: var(--text2);
-    margin-top: 1px;
-  }
+  td.appt-col { white-space: nowrap; }
+  .appt-date { font-size: 12px; color: var(--purple); font-weight: 500; }
+  .appt-time { font-size: 11px; color: var(--text2); margin-top: 1px; }
   /* STATUS BADGES */
   .badge {
     display: inline-block;
@@ -285,7 +282,6 @@
   .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
   .form-textarea { resize: vertical; min-height: 70px; }
   option { background: var(--bg2); }
-  /* ★ 預約欄位在 Modal 中的分隔區塊 */
   .appt-section {
     display: none;
     grid-column: 1 / -1;
@@ -298,9 +294,7 @@
   }
   .appt-section.show { display: grid; }
   .appt-section .form-label { color: var(--purple); }
-  .appt-section .form-input {
-    border-color: rgba(122,95,170,0.3);
-  }
+  .appt-section .form-input { border-color: rgba(122,95,170,0.3); }
   .appt-section .form-input:focus { border-color: var(--purple); }
   .appt-section-title {
     grid-column: 1 / -1;
@@ -396,6 +390,8 @@
     .form-grid { grid-template-columns: 1fr; }
     .appt-section { grid-template-columns: 1fr; }
     .toolbar { gap: 8px; }
+    .header-right { gap: 8px; }
+    .btn-notify { padding: 7px 10px; font-size: 12px; }
   }
 </style>
 
@@ -406,7 +402,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="蒔萃名單">
 <meta name="theme-color" content="#8b6340">
-<!-- Apple Touch Icon（沒有 icon 檔案時用 SVG 當佔位） -->
 <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
@@ -426,6 +421,7 @@
       <div class="sync-dot" id="sync-dot" style="background:var(--warn)"></div>
       <span id="sync-label">連接中…</span>
     </div>
+    <button class="btn btn-notify" id="btn-notify" onclick="notifyDispatch()">📢 通知跑單</button>
     <button class="btn btn-primary" onclick="openModal()">＋ 新增名單</button>
   </div>
 </header>
@@ -482,7 +478,6 @@
         <th onclick="sortBy('media')">媒體</th>
         <th onclick="sortBy('agent')">跑單</th>
         <th onclick="sortBy('dispatch')">派發日</th>
-        <!-- ★ 新增：拆分後的預約欄 -->
         <th onclick="sortBy('apptDate')">預約日期 <span id="sort-apptDate"></span></th>
         <th onclick="sortBy('apptTime')">預約時間 <span id="sort-apptTime"></span></th>
         <th>詳細狀況</th>
@@ -559,7 +554,6 @@
           <input class="form-input" type="text" id="f-dispatch" placeholder="5/19">
         </div>
 
-        <!-- ★ 已預約時顯示的區塊，分成「日期」與「時間」兩格 -->
         <div class="appt-section" id="fg-appt">
           <div class="appt-section-title">📅 預約資訊</div>
           <div class="form-group">
@@ -593,21 +587,17 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv
 let records = [];
 let editingId = null;
 let sortCol = 'dispatch';
-let sortAsc = false; // false = 遞減
+let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
 
-// ★ 解析各種預約格式，回傳 { date, time }
 function parseApptLegacy(raw) {
   if (!raw) return { date: '', time: '' };
   const s = String(raw).trim();
-
-  // 1. 處理 Date 物件字串，例如 "Tue May 19 2026 00:00:00 GMT+0800 (台北標準時間)"
   if (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/.test(s)) {
     const d = new Date(s);
     if (!isNaN(d)) {
       const dateStr = (d.getMonth()+1) + '/' + d.getDate();
-      // 只有非午夜才顯示時間
       const h = d.getHours(), mi = d.getMinutes();
       const timeStr = (h !== 0 || mi !== 0)
         ? String(h).padStart(2,'0') + ':' + String(mi).padStart(2,'0')
@@ -615,30 +605,19 @@ function parseApptLegacy(raw) {
       return { date: dateStr, time: timeStr };
     }
   }
-
-  // 2. 中文格式，例如 "5/19下午3:00" → 拆出日期與時間
   const cnPmMatch = s.match(/^(\d{1,2}\/\d{1,2})[下午後]{0,2}(\d{1,2}:\d{2})/);
   if (cnPmMatch) return { date: cnPmMatch[1], time: cnPmMatch[2] };
-
-  // 3. 標準格式 "5/17 11:00" 或 "2026/5/17 11:00"
   const stdMatch = s.match(/^([\d\/]+)\s+(\d{1,2}:\d{2})/);
   if (stdMatch) return { date: stdMatch[1], time: stdMatch[2] };
-
-  // 4. 只有日期，沒有時間
   if (/^\d{1,2}\/\d{1,2}$/.test(s) || /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(s)) {
     return { date: s, time: '' };
   }
-
-  // 5. 其他無法解析的，整個放日期欄
   return { date: s, time: '' };
 }
 
-// ★ 資料正規化：自動拆分舊格式 appt 或 apptDate，並處理 Sheets 時間格問題
 function normalizeRecord(r) {
-  // ── Step 1：先處理 apptTime（可能是 Sheets 時間格 → "Sat Dec 30 1899 HH:MM:SS GMT+..."）
   if (r.apptTime) {
     const t = String(r.apptTime).trim();
-    // Google Sheets 純時間格：內部以 1899/12/30 為基準日，辨識關鍵字 "1899"
     if (/1899/.test(t) || /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/.test(t)) {
       const d = new Date(t);
       if (!isNaN(d)) {
@@ -648,14 +627,10 @@ function normalizeRecord(r) {
       }
     }
   }
-
-  // ── Step 2：處理 apptDate（可能是舊的合併格式、Date 物件字串、或已正常）
   const raw = String(r.apptDate || r.appt || '').trim();
   if (raw) {
-    // 已是乾淨日期格式（"5/17" 或 "2026/5/17"）→ 保留，不覆蓋
     const isCleanDate = /^\d{1,4}\/\d{1,2}(\/\d{1,2})?$/.test(raw);
     if (!isCleanDate) {
-      // 需要重新解析（Date 物件字串、中文格式、舊合併格式…）
       const parsed = parseApptLegacy(raw);
       r.apptDate = parsed.date;
       if (!r.apptTime) r.apptTime = parsed.time;
@@ -663,7 +638,6 @@ function normalizeRecord(r) {
   } else {
     r.apptDate = '';
   }
-
   r.apptTime = r.apptTime || '';
   return r;
 }
@@ -719,6 +693,22 @@ function setSyncStatus(state) {
   }
 }
 
+// ─── 管理員通知跑單 ───
+async function notifyDispatch() {
+  const btn = document.getElementById('btn-notify');
+  if (!confirm('確認發送今日名單通知給跑單業務？')) return;
+  btn.disabled = true;
+  btn.textContent = '發送中…';
+  const result = await apiCall('notifyDispatch', {});
+  btn.disabled = false;
+  btn.textContent = '📢 通知跑單';
+  if (result && result.ok) {
+    showToast('✅ 已通知所有跑單業務！', 'success');
+  } else {
+    showToast('發送失敗，請重試', 'error');
+  }
+}
+
 // ─── FILTER & SORT ───
 function getFiltered() {
   const q = document.getElementById('search').value.toLowerCase();
@@ -746,7 +736,6 @@ function getFiltered() {
       return sortAsc ? da - db : db - da;
     }
     if (sortCol === 'dispatch') {
-      // ★ 先比年份（遞減），再比派發日（遞減）
       const ya = parseInt(a.year||0), yb = parseInt(b.year||0);
       if (ya !== yb) return sortAsc ? ya - yb : yb - ya;
       const [am=0,ad=0] = (a.dispatch||'').split('/').map(Number);
@@ -784,7 +773,6 @@ function renderTable() {
   if (page > totalPages) page = totalPages;
   const slice = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
-  // Stats
   document.getElementById('s-total').textContent = records.length;
   document.getElementById('s-visited').textContent = records.filter(r=>r.status==='已來訪').length;
   document.getElementById('s-reserved').textContent = records.filter(r=>r.status==='已預約').length;
@@ -833,9 +821,7 @@ function renderTable() {
           <td style="color:var(--text2)">${esc(r.media)}</td>
           <td style="color:var(--text2)">${esc(r.agent)}</td>
           <td style="color:var(--text2);font-size:12px">${esc(r.dispatch)}</td>
-          <!-- ★ 預約日期（獨立欄） -->
           <td class="appt-col"><span class="appt-date">${esc(r.apptDate) || '<span style="color:var(--text3)">—</span>'}</span></td>
-          <!-- ★ 預約時間（獨立欄） -->
           <td class="appt-col"><span class="appt-time" style="font-size:13px;color:var(--purple)">${esc(r.apptTime) || '<span style="color:var(--text3)">—</span>'}</span></td>
           <td class="notes-col" title="${esc(r.notes)}">${esc(r.notes)}</td>
           <td style="width:24px;text-align:center;color:var(--text3);font-size:16px">›</td>
@@ -844,7 +830,6 @@ function renderTable() {
     }).join('');
   }
 
-  // Pagination
   document.getElementById('page-info').textContent = `共 ${total} 筆，第 ${page}/${totalPages} 頁`;
   const pbDiv = document.getElementById('page-btns');
   let btns = '';
@@ -855,7 +840,6 @@ function renderTable() {
   btns += `<button class="page-btn" onclick="changePage(${page+1})" ${page>=totalPages?'disabled':''}>›</button>`;
   pbDiv.innerHTML = btns;
 
-  // Sort indicators
   ['year','date','name','phone','region','status','media','agent','dispatch','apptDate','apptTime'].forEach(c => {
     const el = document.getElementById('sort-'+c);
     if (el) el.textContent = sortCol===c ? (sortAsc?'↑':'↓') : '';
@@ -922,7 +906,6 @@ function openModal(id) {
     document.getElementById('f-phone').value = r.phone || '';
     document.getElementById('f-region').value = r.region || '';
     document.getElementById('f-contact-status').value = r.status || '';
-    // ★ 分開填入日期與時間
     document.getElementById('f-appt-date').value = r.apptDate || '';
     document.getElementById('f-appt-time').value = r.apptTime || '';
     document.getElementById('fg-appt').classList.toggle('show', r.status === '已預約');
@@ -939,7 +922,6 @@ function openModal(id) {
     document.getElementById('f-phone').value = '';
     document.getElementById('f-region').value = '臺中市';
     document.getElementById('f-contact-status').value = '待確認';
-    // ★ 清空兩個欄位
     document.getElementById('f-appt-date').value = '';
     document.getElementById('f-appt-time').value = '';
     document.getElementById('fg-appt').classList.remove('show');
@@ -963,7 +945,6 @@ async function saveRecord() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { showToast('請填入姓名', 'error'); return; }
 
-  // ★ 讀取拆分後的預約日期與時間
   const apptDate = document.getElementById('f-appt-date').value.trim();
   const apptTime = document.getElementById('f-appt-time').value.trim();
 
@@ -979,9 +960,8 @@ async function saveRecord() {
     agent: document.getElementById('f-agent-input').value.trim(),
     dispatch: document.getElementById('f-dispatch').value,
     notes: document.getElementById('f-notes').value.trim(),
-    apptDate,   // ★ 預約日期
-    apptTime,   // ★ 預約時間
-    // ★ 帶入舊的 eventId（更新時用來刪除舊日曆事件）
+    apptDate,
+    apptTime,
     eventId: editingId ? ((records.find(r=>r.id===editingId)||{}).eventId || '') : '',
   };
 
@@ -1001,20 +981,16 @@ async function saveRecord() {
     showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
     if (rec.status === '已預約' && rec.apptDate && rec.apptTime) {
       if (action === 'add') {
-        // ★ 新增：直接建立日曆事件
         await syncToCalendar(rec);
       } else {
-        // ★ 更新：先刪舊事件，再建新事件
         await updateCalendar(rec);
       }
     } else if (action === 'update' && rec.eventId) {
-      // ★ 狀態改為非已預約，但原本有日曆事件 → 刪除
       await apiCall('deleteCalendar', { eventId: rec.eventId, id: rec.id });
     }
   }
 }
 
-// ★ 新增日曆事件
 async function syncToCalendar(rec) {
   const result = await apiCall('addCalendar', rec);
   if (result && result.ok && result.msg === 'calendar_added') {
@@ -1022,13 +998,10 @@ async function syncToCalendar(rec) {
   }
 }
 
-// ★ 更新日曆事件（刪舊建新）
 async function updateCalendar(rec) {
-  // 先刪除舊的日曆事件
   if (rec.eventId) {
     await apiCall('deleteCalendar', { eventId: rec.eventId, id: rec.id });
   }
-  // 再建立新的日曆事件
   const result = await apiCall('addCalendar', rec);
   if (result && result.ok && result.msg === 'calendar_added') {
     showToast('日曆事件已更新 📅', 'success');
@@ -1052,7 +1025,6 @@ async function deleteRecord() {
 // ─── EXPORT ───
 function exportCSV() {
   const filtered = getFiltered();
-  // ★ 匯出時包含預約日期與預約時間兩欄
   const headers = ['日期','姓名','電話','區域','聯絡狀況','媒體','跑單','派發日','預約日期','預約時間','詳細狀況'];
   const rows = filtered.map(r => [
     r.date,r.name,r.phone,r.region,r.status,r.media,r.agent,r.dispatch,
@@ -1081,39 +1053,33 @@ window.addEventListener('DOMContentLoaded', async () => {
   setSyncStatus('loading');
   await loadData();
 
-  // ★ 讀取網址參數，自動套用篩選
   const urlParams = new URLSearchParams(window.location.search);
   const agentParam = urlParams.get('agent');
   const statusParam = urlParams.get('status');
   const mediaParam = urlParams.get('media');
 
-  // ★ 先跑一次 renderTable 讓 populateFilters 填好下拉選單
   renderTable();
 
   if (agentParam) {
-    // 此時選單已有選項，可以正確設定值
     document.getElementById('f-agent').value = agentParam;
-
-    // ★ 完全隱藏整個篩選工具列（業務無法自行更改）
     document.querySelector('.toolbar').style.display = 'none';
 
-    // ★ 覆寫 clearFilters，讓清除篩選無法清掉 agent
+    // 業務模式：隱藏「通知跑單」按鈕
+    document.getElementById('btn-notify').style.display = 'none';
+
     window.clearFilters = function() {
       document.getElementById('search').value = '';
       document.getElementById('f-status').value = '';
       document.getElementById('f-media').value = '';
       document.getElementById('f-date').value = '';
       document.getElementById('f-year-filter').value = '';
-      // ★ 不清 f-agent，確保業務鎖定
       page = 1;
       renderTable();
     };
 
-    // ★ 插入精簡搜尋列（只有搜尋框 + 狀態篩選）
-    // 插入精簡搜尋列
     const agentBar = document.createElement('div');
     agentBar.style.cssText = 'padding:10px 24px;display:flex;gap:10px;align-items:center;background:var(--bg);border-bottom:1px solid var(--border);';
-    
+
     const searchInput = document.createElement('input');
     searchInput.className = 'search-box';
     searchInput.type = 'text';
@@ -1124,7 +1090,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('search').value = this.value;
       renderTable();
     });
-    
+
     const statusSel = document.createElement('select');
     statusSel.className = 'filter';
     statusSel.id = 'f-status-agent';
@@ -1138,11 +1104,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('f-status').value = this.value;
       renderTable();
     });
-    
+
     const nameSpan = document.createElement('span');
     nameSpan.style.cssText = 'font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;';
     nameSpan.textContent = '👤 ' + agentParam + ' 的名單';
-    
+
     agentBar.appendChild(searchInput);
     agentBar.appendChild(statusSel);
     agentBar.appendChild(nameSpan);
@@ -1151,7 +1117,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (statusParam) document.getElementById('f-status').value = statusParam;
   if (mediaParam) document.getElementById('f-media').value = mediaParam;
 
-  // ★ 套用參數後再跑一次，確保篩選生效
   renderTable();
   document.getElementById('loading-overlay').style.display = 'none';
   showToast('名單已載入，共 ' + records.length + ' 筆', 'success');
@@ -1162,7 +1127,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }, 3 * 60 * 1000);
 });
 
-// ★ 聯絡狀況切換：「已預約」才顯示預約日期＋時間區塊
 function toggleApptField() {
   const status = document.getElementById('f-contact-status').value;
   const fg = document.getElementById('fg-appt');
