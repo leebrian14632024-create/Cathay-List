@@ -395,7 +395,6 @@
   }
 </style>
 
-<!-- PWA 設定 -->
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -405,6 +404,10 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
+
+<button id="dispatchCompleteBtn" style="position: fixed; top: 20px; right: 20px; z-index: 1000; padding: 12px 24px; background-color: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.3s; display: none;">
+    ✅ 派發完成
+</button>
 
 <div id="loading-overlay">
   <div class="spinner"></div>
@@ -434,7 +437,12 @@
   <div class="stat"><div class="stat-num" id="s-missed" style="color:var(--warn)">—</div><div class="stat-label">未接</div></div>
   <div class="stat"><div class="stat-num" id="s-no-need" style="color:var(--danger)">—</div><div class="stat-label">無需求</div></div>
   <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
-  <div class="stat"><div class="stat-num" id="s-week" style="color:var(--accent)">—</div><div class="stat-label">本週新增</div></div>
+  
+  <div class="stat" id="btn-filter-week" onclick="toggleWeekFilter()" style="cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: background 0.2s;">
+    <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
+    <div class="stat-label">本週新增</div>
+  </div>
+  
   <div class="stat"><div class="stat-num" id="s-lastweek" style="color:var(--text2)">—</div><div class="stat-label">上週名單</div></div>
 </div>
 
@@ -497,7 +505,6 @@
   <div class="page-btns" id="page-btns"></div>
 </div>
 
-<!-- MODAL -->
 <div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-header">
@@ -590,6 +597,68 @@ let sortCol = 'dispatch';
 let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
+let isWeekFilterActive = false; // 記錄本週篩選狀態
+
+// ─── 獨立出來的日期計算函式 ───
+function getWeekRange(offset) {
+  const now = new Date();
+  const day = now.getDay() || 7;
+  const mon = new Date(now); mon.setDate(now.getDate() - day + 1 + offset*7);
+  mon.setHours(0,0,0,0);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  sun.setHours(23,59,59,999);
+  return { mon, sun };
+}
+
+function inRange(r, mon, sun) {
+  const parts = (r.date||'').split('/');
+  if (parts.length < 2) return false;
+  const yr = parseInt(r.year) || new Date().getFullYear();
+  const d = new Date(yr, parseInt(parts[0])-1, parseInt(parts[1]));
+  return d >= mon && d <= sun;
+}
+
+// ─── 本週新增統計與篩選邏輯 ───
+function showWeeklyMediaStats() {
+  const thisWeek = getWeekRange(0);
+  const weeklyRecords = records.filter(r => inRange(r, thisWeek.mon, thisWeek.sun));
+
+  if (weeklyRecords.length === 0) {
+    alert("本週目前還沒有新增名單喔！");
+    return;
+  }
+
+  const mediaCounts = {};
+  weeklyRecords.forEach(r => {
+    const media = r.media ? r.media.trim() : "未標註"; 
+    mediaCounts[media] = (mediaCounts[media] || 0) + 1;
+  });
+
+  let resultText = "📊【本週名單來源統計】\n\n";
+  const sortedMedia = Object.entries(mediaCounts).sort((a, b) => b[1] - a[1]);
+  
+  sortedMedia.forEach(([media, count]) => {
+    resultText += `${media}：${count} 筆\n`;
+  });
+  
+  resultText += `\n總計：${weeklyRecords.length} 筆`;
+  alert(resultText);
+}
+
+function toggleWeekFilter() {
+  isWeekFilterActive = !isWeekFilterActive;
+  const btn = document.getElementById('btn-filter-week');
+  
+  if (isWeekFilterActive) {
+    btn.style.background = 'rgba(139,115,85,0.15)'; 
+    showWeeklyMediaStats();
+  } else {
+    btn.style.background = 'transparent';
+  }
+  
+  page = 1;
+  renderTable();
+}
 
 function parseApptLegacy(raw) {
   if (!raw) return { date: '', time: '' };
@@ -717,6 +786,9 @@ function getFiltered() {
   const fMedia = document.getElementById('f-media').value;
   const fDate = document.getElementById('f-date').value;
   const fYear = document.getElementById('f-year-filter').value;
+  
+  const thisWeek = getWeekRange(0);
+
   return records.filter(r => {
     if (q && !`${r.name}${r.phone}${r.notes}${r.region}${r.agent}`.toLowerCase().includes(q)) return false;
     if (fStatus && r.status !== fStatus) return false;
@@ -724,6 +796,10 @@ function getFiltered() {
     if (fMedia && r.media !== fMedia) return false;
     if (fDate && r.date !== fDate) return false;
     if (fYear && r.year !== fYear) return false;
+    
+    // 如果啟用了本週篩選，將非本週的名單過濾掉
+    if (isWeekFilterActive && !inRange(r, thisWeek.mon, thisWeek.sun)) return false;
+    
     return true;
   }).sort((a, b) => {
     let av = a[sortCol] || '', bv = b[sortCol] || '';
@@ -761,6 +837,11 @@ function clearFilters() {
   document.getElementById('f-media').value = '';
   document.getElementById('f-date').value = '';
   document.getElementById('f-year-filter').value = '';
+  
+  // 重置本週篩選狀態
+  isWeekFilterActive = false;
+  document.getElementById('btn-filter-week').style.background = 'transparent';
+  
   page = 1;
   renderTable();
 }
@@ -780,22 +861,6 @@ function renderTable() {
   document.getElementById('s-missed').textContent = records.filter(r=>r.status==='未接').length;
   document.getElementById('s-no-need').textContent = records.filter(r=>r.status==='無需求').length;
 
-  function getWeekRange(offset) {
-    const now = new Date();
-    const day = now.getDay() || 7;
-    const mon = new Date(now); mon.setDate(now.getDate() - day + 1 + offset*7);
-    mon.setHours(0,0,0,0);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    sun.setHours(23,59,59,999);
-    return { mon, sun };
-  }
-  function inRange(r, mon, sun) {
-    const parts = (r.date||'').split('/');
-    if (parts.length < 2) return false;
-    const yr = parseInt(r.year) || 2025;
-    const d = new Date(yr, parseInt(parts[0])-1, parseInt(parts[1]));
-    return d >= mon && d <= sun;
-  }
   const thisWeek = getWeekRange(0);
   const lastWeek = getWeekRange(-1);
   document.getElementById('s-week').textContent = records.filter(r => inRange(r, thisWeek.mon, thisWeek.sun)).length;
@@ -1074,6 +1139,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('f-date').value = '';
       document.getElementById('f-year-filter').value = '';
       page = 1;
+      
+      // 重置本週篩選狀態
+      isWeekFilterActive = false;
+      const weekBtn = document.getElementById('btn-filter-week');
+      if (weekBtn) weekBtn.style.background = 'transparent';
+      
       renderTable();
     };
 
@@ -1156,6 +1227,42 @@ function autoFillDispatch() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
   if ((e.metaKey||e.ctrlKey) && e.key==='n') { e.preventDefault(); openModal(); }
+});
+</script>
+
+<script>
+document.getElementById('dispatchCompleteBtn').addEventListener('click', function() {
+    if(confirm('確定要發送「今日已派發」通知給各業務嗎？')) {
+        const btn = document.getElementById('dispatchCompleteBtn');
+        btn.innerText = '發送中...';
+        btn.style.backgroundColor = '#999';
+        btn.disabled = true;
+
+        const payload = { action: 'dispatchComplete' };
+        
+        // 如果後續設定好 LINE，請將 API_URL 替換為實際的 Web App URL
+        fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.ok) {
+                alert('✅ 已成功發送「今日已派發」通知給所有業務！');
+            } else {
+                alert('⚠️ 發送失敗，請稍後再試。');
+            }
+        })
+        .catch(err => {
+            console.error('通知發送發生錯誤:', err);
+            alert('⚠️ 系統發生錯誤，無法發送通知。');
+        })
+        .finally(() => {
+            btn.innerText = '✅ 派發完成';
+            btn.style.backgroundColor = '#4CAF50';
+            btn.disabled = false;
+        });
+    }
 });
 </script>
 
