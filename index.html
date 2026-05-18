@@ -32,7 +32,6 @@
     font-size: 14px;
     line-height: 1.6;
   }
-  /* HEADER */
   header {
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
@@ -69,7 +68,6 @@
     animation: pulse 2s infinite;
   }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  /* STATS BAR */
   .stats-bar {
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
@@ -86,7 +84,6 @@
   }
   .stat-num { font-size: 20px; font-weight: 600; }
   .stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; white-space: nowrap; }
-  /* TOOLBAR */
   .toolbar {
     padding: 14px 24px;
     display: flex;
@@ -144,8 +141,6 @@
     font-weight: 600;
   }
   .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #faf6f0; }
-
-  /* TABLE */
   .table-wrap {
     overflow-x: auto;
     padding: 0 24px 24px;
@@ -193,7 +188,6 @@
   td.appt-col { white-space: nowrap; }
   .appt-date { font-size: 12px; color: var(--purple); font-weight: 500; }
   .appt-time { font-size: 11px; color: var(--text2); margin-top: 1px; }
-  /* STATUS BADGES */
   .badge {
     display: inline-block;
     padding: 2px 8px;
@@ -209,7 +203,6 @@
   .badge-無需求 { background: rgba(224,92,92,.15); color: #e05c5c; border: 1px solid rgba(224,92,92,.25); }
   .badge-空號 { background: rgba(92,90,86,.15); color: var(--text3); border: 1px solid rgba(92,90,86,.25); }
   .badge-default { background: rgba(255,255,255,.06); color: var(--text2); border: 1px solid var(--border); }
-  /* MODAL */
   .modal-overlay {
     display: none;
     position: fixed;
@@ -306,14 +299,12 @@
   }
   .btn-danger { background: rgba(224,92,92,.15); border-color: var(--danger); color: var(--danger); }
   .btn-danger:hover { background: var(--danger); color: #fff; }
-  /* EMPTY */
   .empty-state {
     text-align: center;
     padding: 60px 24px;
     color: var(--text3);
   }
   .empty-icon { font-size: 36px; margin-bottom: 12px; }
-  /* TOAST */
   .toast {
     position: fixed;
     bottom: 24px;
@@ -333,7 +324,6 @@
   .toast.show { transform: translateY(0); opacity: 1; }
   .toast.success { border-left: 3px solid var(--success); }
   .toast.error { border-left: 3px solid var(--danger); }
-  /* LOADING */
   #loading-overlay {
     position: fixed;
     inset: 0;
@@ -354,7 +344,6 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { color: var(--text2); font-size: 13px; }
-  /* PAGINATION */
   .pagination {
     display: flex;
     align-items: center;
@@ -386,8 +375,6 @@
     .header-right { gap: 8px; }
   }
 </style>
-
-<!-- PWA 設定 -->
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -582,6 +569,7 @@ let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
 
+// ─── 解析舊格式預約欄位 ───
 function parseApptLegacy(raw) {
   if (!raw) return { date: '', time: '' };
   const s = String(raw).trim();
@@ -640,7 +628,8 @@ async function loadData() {
     const res = await fetch(API_URL);
     const json = await res.json();
     if (json.ok) {
-      records = json.data.filter(r => r.name).map(r => normalizeRecord(r));
+      // 過濾掉已標記刪除的列
+      records = json.data.filter(r => r.name && r.name !== '__deleted__').map(r => normalizeRecord(r));
       setSyncStatus('ok');
     } else {
       throw new Error('API error');
@@ -657,6 +646,7 @@ async function apiCall(action, record) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // ★ 避免 CORS preflight
       body: JSON.stringify({ action, record })
     });
     const json = await res.json();
@@ -684,7 +674,7 @@ function setSyncStatus(state) {
   }
 }
 
-// ─── FILTER & SORT ───
+// ─── 篩選 & 排序 ───
 function getFiltered() {
   const q = document.getElementById('search').value.toLowerCase();
   const fStatus = document.getElementById('f-status').value;
@@ -740,7 +730,7 @@ function clearFilters() {
   renderTable();
 }
 
-// ─── RENDER ───
+// ─── 渲染 ───
 function renderTable() {
   const filtered = getFiltered();
   const total = filtered.length;
@@ -748,7 +738,6 @@ function renderTable() {
   if (page > totalPages) page = totalPages;
   const slice = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
-  // 統計數字（管理員模式才有這些元素）
   const sTotal = document.getElementById('s-total');
   if (sTotal) {
     sTotal.textContent = records.length;
@@ -926,8 +915,11 @@ async function saveRecord() {
   const apptDate = document.getElementById('f-appt-date').value.trim();
   const apptTime = document.getElementById('f-appt-time').value.trim();
 
+  // ★ 新增時先用暫時 id，等後端回傳後換成真實行號
+  const tempId = editingId || ('temp_' + Date.now());
+
   const rec = {
-    id: editingId || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2,6)),
+    id: tempId,
     year: document.getElementById('f-year').value,
     date: document.getElementById('f-date-input').value,
     name,
@@ -956,7 +948,15 @@ async function saveRecord() {
 
   const result = await apiCall(action, rec);
   if (result && result.ok) {
+    // ★ 新增成功後，將暫時 id 替換為後端回傳的真實行號
+    if (action === 'add' && result.newId) {
+      const idx = records.findIndex(r => r.id === tempId);
+      if (idx >= 0) records[idx].id = result.newId;
+      rec.id = result.newId;
+    }
     showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
+
+    // 日曆同步
     if (rec.status === '已預約' && rec.apptDate && rec.apptTime) {
       if (action === 'add') {
         await syncToCalendar(rec);
@@ -966,6 +966,13 @@ async function saveRecord() {
     } else if (action === 'update' && rec.eventId) {
       await apiCall('deleteCalendar', { eventId: rec.eventId, id: rec.id });
     }
+  } else {
+    // ★ 儲存失敗：從 records 移除暫時新增的項目，並提示重試
+    if (action === 'add') {
+      records = records.filter(r => r.id !== tempId);
+      renderTable();
+    }
+    showToast('儲存失敗，請重試', 'error');
   }
 }
 
@@ -1000,7 +1007,7 @@ async function deleteRecord() {
   }
 }
 
-// ─── EXPORT ───
+// ─── 匯出 ───
 function exportCSV() {
   const filtered = getFiltered();
   const headers = ['日期','姓名','電話','區域','聯絡狀況','媒體','跑單','派發日','預約日期','預約時間','詳細狀況'];
@@ -1017,7 +1024,7 @@ function exportCSV() {
   showToast('CSV 已匯出', 'success');
 }
 
-// ─── TOAST ───
+// ─── Toast ───
 function showToast(msg, type='success') {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1026,7 +1033,7 @@ function showToast(msg, type='success') {
   setTimeout(()=>t.classList.remove('show'), 2800);
 }
 
-// ─── INIT ───
+// ─── 初始化 ───
 window.addEventListener('DOMContentLoaded', async () => {
   setSyncStatus('loading');
   await loadData();
@@ -1041,7 +1048,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (agentParam) {
     document.getElementById('f-agent').value = agentParam;
     document.querySelector('.toolbar').style.display = 'none';
-    // 業務模式：隱藏統計數字列
     document.getElementById('stats-bar').style.display = 'none';
 
     window.clearFilters = function() {
@@ -1097,6 +1103,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderTable();
   document.getElementById('loading-overlay').style.display = 'none';
   showToast('名單已載入，共 ' + records.length + ' 筆', 'success');
+
+  // 每 3 分鐘自動重新載入
   setInterval(async () => {
     await loadData();
     renderTable();
@@ -1111,7 +1119,8 @@ function toggleApptField() {
     fg.classList.add('show');
     const dateInput = document.getElementById('f-appt-date');
     if (!dateInput.value) {
-      dateInput.value = new Date().getFullYear() + '/';
+      const today = new Date();
+      dateInput.value = (today.getMonth()+1) + '/' + today.getDate();
     }
     dateInput.focus();
     const len = dateInput.value.length;
