@@ -564,7 +564,7 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
 let records = [];
 let editingId = null;
-let sortCol = 'dispatch';
+let sortCol = 'date';
 let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
@@ -692,19 +692,13 @@ function getFiltered() {
     return true;
   }).sort((a, b) => {
     let av = a[sortCol] || '', bv = b[sortCol] || '';
-    if (sortCol === 'date') {
+    if (sortCol === 'date' || sortCol === 'dispatch') {
+      const fa = sortCol === 'date' ? (a.date||'') : (a.dispatch||'');
+      const fb = sortCol === 'date' ? (b.date||'') : (b.dispatch||'');
       const ya = parseInt(a.year||0), yb = parseInt(b.year||0);
       if (ya !== yb) return sortAsc ? ya - yb : yb - ya;
-      const [am=0,ad=0] = (a.date||'').split('/').map(Number);
-      const [bm=0,bd=0] = (b.date||'').split('/').map(Number);
-      const da = am*100+ad, db = bm*100+bd;
-      return sortAsc ? da - db : db - da;
-    }
-    if (sortCol === 'dispatch') {
-      const ya = parseInt(a.year||0), yb = parseInt(b.year||0);
-      if (ya !== yb) return sortAsc ? ya - yb : yb - ya;
-      const [am=0,ad=0] = (a.dispatch||'').split('/').map(Number);
-      const [bm=0,bd=0] = (b.dispatch||'').split('/').map(Number);
+      const [am=0,ad=0] = fa.split('/').map(Number);
+      const [bm=0,bd=0] = fb.split('/').map(Number);
       const da = am*100+ad, db = bm*100+bd;
       return sortAsc ? da - db : db - da;
     }
