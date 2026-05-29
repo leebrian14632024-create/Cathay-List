@@ -203,6 +203,11 @@
   .badge-無需求 { background: rgba(224,92,92,.15); color: #e05c5c; border: 1px solid rgba(224,92,92,.25); }
   .badge-空號 { background: rgba(92,90,86,.15); color: var(--text3); border: 1px solid rgba(92,90,86,.25); }
   .badge-default { background: rgba(255,255,255,.06); color: var(--text2); border: 1px solid var(--border); }
+  /* 舊年份列淡化 */
+  tr.old-year td { opacity: 0.55; }
+  tr.old-year:hover td { opacity: 1; }
+  /* 未派發列（無 dispatch、無 status）標示 */
+  tr.new-unassigned td { background: rgba(196,126,42,0.05); }
   .modal-overlay {
     display: none;
     position: fixed;
@@ -367,6 +372,17 @@
   .page-btn:hover { border-color: var(--accent); color: var(--accent); }
   .page-btn.active { background: var(--accent); border-color: var(--accent); color: #faf6f0; font-weight: 600; }
   .page-btn:disabled { opacity: .3; cursor: default; }
+  /* 年份分隔線 */
+  tr.year-divider td {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    letter-spacing: 1px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    pointer-events: none;
+  }
   @media (max-width: 600px) {
     .stats-bar { gap: 16px; }
     .form-grid { grid-template-columns: 1fr; }
@@ -562,10 +578,10 @@
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
+const CURRENT_YEAR = 2026; // 當前主力年份，舊年份排最後
 let records = [];
 let editingId = null;
-// ★ 預設排序改為「派發日」遞減，未派發排最前面
-let sortCol = 'dispatch';
+let sortCol = 'date';
 let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
@@ -674,13 +690,52 @@ function setSyncStatus(state) {
   }
 }
 
-// ─── 日期數值轉換（年份 + 月/日 → 可比較數字）───
-function dateToNum(year, dateStr) {
-  const yr = parseInt(year || 0);
+// ─── 日期轉數字（月/日 → 可比較） ───
+function dateToNum(dateStr) {
   const parts = (dateStr || '').split('/').map(Number);
-  const m = parts[0] || 0;
-  const d = parts[1] || 0;
-  return yr * 10000 + m * 100 + d;
+  return (parts[0] || 0) * 100 + (parts[1] || 0);
+}
+
+// ─── 核心排序函式 ───
+// 規則：
+// 1. 2026（當前年） > 舊年份（2025以前）
+// 2. 同為當前年：無 status（新進未派發）優先 → 再依「日期遞減」
+// 3. 同為舊年份：依「日期遞減」
+// 4. 使用者手動點欄位標題時，僅在「同區塊內」覆寫排序
+function defaultSort(a, b) {
+  const aIsOld = parseInt(a.year || 0) < CURRENT_YEAR;
+  const bIsOld = parseInt(b.year || 0) < CURRENT_YEAR;
+
+  // 舊年份永遠排後面
+  if (aIsOld !== bIsOld) return aIsOld ? 1 : -1;
+
+  if (!aIsOld && !bIsOld) {
+    // 同為當前年：無 status（新進名單）排前面
+    const aNoStatus = !a.status;
+    const bNoStatus = !b.status;
+    if (aNoStatus !== bNoStatus) return aNoStatus ? -1 : 1;
+  }
+
+  // 同區塊內：依日期遞減（年份相同時只比月日）
+  const ya = parseInt(a.year || 0), yb = parseInt(b.year || 0);
+  if (ya !== yb) return yb - ya;
+  return dateToNum(b.date) - dateToNum(a.date);
+}
+
+// 使用者手動點欄位時的排序（保留年份分層）
+function userSort(a, b, col, asc) {
+  const aIsOld = parseInt(a.year || 0) < CURRENT_YEAR;
+  const bIsOld = parseInt(b.year || 0) < CURRENT_YEAR;
+  if (aIsOld !== bIsOld) return aIsOld ? 1 : -1;
+
+  let av = a[col] || '', bv = b[col] || '';
+  if (col === 'date' || col === 'dispatch') {
+    const fa = col === 'date' ? (a.date || '') : (a.dispatch || '');
+    const fb = col === 'date' ? (b.date || '') : (b.dispatch || '');
+    const da = dateToNum(fa), db = dateToNum(fb);
+    return asc ? da - db : db - da;
+  }
+  return asc ? av.localeCompare(bv, 'zh-TW') : bv.localeCompare(av, 'zh-TW');
 }
 
 // ─── 篩選 & 排序 ───
@@ -691,7 +746,8 @@ function getFiltered() {
   const fMedia = document.getElementById('f-media').value;
   const fDate = document.getElementById('f-date').value;
   const fYear = document.getElementById('f-year-filter').value;
-  return records.filter(r => {
+
+  const filtered = records.filter(r => {
     if (q && !`${r.name}${r.phone}${r.notes}${r.region}${r.agent}`.toLowerCase().includes(q)) return false;
     if (fStatus && r.status !== fStatus) return false;
     if (fAgent && r.agent !== fAgent) return false;
@@ -699,34 +755,16 @@ function getFiltered() {
     if (fDate && r.date !== fDate) return false;
     if (fYear && r.year !== fYear) return false;
     return true;
-  }).sort((a, b) => {
-    // ★ 未派發（dispatch 為空）永遠排最前面，不受 sortCol / sortAsc 影響
-    const aNoDispatch = !a.dispatch;
-    const bNoDispatch = !b.dispatch;
-    if (aNoDispatch !== bNoDispatch) return aNoDispatch ? -1 : 1;
-
-    // 同為未派發時，依日期遞減排列
-    if (aNoDispatch && bNoDispatch) {
-      const da = dateToNum(a.year, a.date);
-      const db = dateToNum(b.year, b.date);
-      return db - da;
-    }
-
-    // ★ 一般排序邏輯
-    let av = a[sortCol] || '', bv = b[sortCol] || '';
-    if (sortCol === 'date' || sortCol === 'dispatch') {
-      const fa = sortCol === 'date' ? (a.date || '') : (a.dispatch || '');
-      const fb = sortCol === 'date' ? (b.date || '') : (b.dispatch || '');
-      const ya = parseInt(a.year || 0), yb = parseInt(b.year || 0);
-      // dispatch 沒有年份欄位，改用 date 的年份做輔助
-      const dispYa = sortCol === 'dispatch' ? parseInt(a.year || 0) : ya;
-      const dispYb = sortCol === 'dispatch' ? parseInt(b.year || 0) : yb;
-      const numA = dateToNum(dispYa, fa);
-      const numB = dateToNum(dispYb, fb);
-      return sortAsc ? numA - numB : numB - numA;
-    }
-    return sortAsc ? av.localeCompare(bv, 'zh-TW') : bv.localeCompare(av, 'zh-TW');
   });
+
+  // 使用者有手動點欄位 → userSort；否則 → defaultSort
+  const isUserSort = sortCol !== 'date' || sortAsc !== false;
+  filtered.sort((a, b) => {
+    if (isUserSort) return userSort(a, b, sortCol, sortAsc);
+    return defaultSort(a, b);
+  });
+
+  return filtered;
 }
 
 function sortBy(col) {
@@ -743,6 +781,9 @@ function clearFilters() {
   document.getElementById('f-media').value = '';
   document.getElementById('f-date').value = '';
   document.getElementById('f-year-filter').value = '';
+  // 清除篩選同時重置為預設排序
+  sortCol = 'date';
+  sortAsc = false;
   page = 1;
   renderTable();
 }
@@ -755,6 +796,7 @@ function renderTable() {
   if (page > totalPages) page = totalPages;
   const slice = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
+  // 統計數字
   const sTotal = document.getElementById('s-total');
   if (sTotal) {
     sTotal.textContent = records.length;
@@ -793,12 +835,26 @@ function renderTable() {
     document.getElementById('empty-state').style.display = 'block';
   } else {
     document.getElementById('empty-state').style.display = 'none';
-    tbody.innerHTML = slice.map(r => {
-      // ★ 未派發的列加上淡色背景以便辨識
-      const noDispatchStyle = !r.dispatch ? 'background:rgba(196,126,42,0.06);' : '';
-      return `
-        <tr onclick="openModal('${r.id}')" style="${noDispatchStyle}">
-          <td style="color:var(--text3);font-size:12px">${r.year || '—'}</td>
+
+    let html = '';
+    let lastYear = null;
+
+    slice.forEach(r => {
+      const yr = r.year || '—';
+      const isOld = parseInt(r.year || 0) < CURRENT_YEAR;
+      const isNewUnassigned = !isOld && !r.status;
+
+      // 插入年份分隔線（當年份切換時）
+      if (yr !== lastYear) {
+        const label = isOld ? `▾ ${yr} 年舊名單` : `▾ ${yr} 年`;
+        html += `<tr class="year-divider"><td colspan="13">${label}</td></tr>`;
+        lastYear = yr;
+      }
+
+      const rowClass = isOld ? 'old-year' : (isNewUnassigned ? 'new-unassigned' : '');
+      html += `
+        <tr class="${rowClass}" onclick="openModal('${r.id}')">
+          <td style="color:var(--text3);font-size:12px">${esc(yr)}</td>
           <td style="color:var(--text2);font-size:12px">${r.date || '—'}</td>
           <td style="font-weight:500">${esc(r.name)}</td>
           <td style="font-family:monospace;color:var(--text2)">${esc(r.phone)}</td>
@@ -813,7 +869,9 @@ function renderTable() {
           <td style="width:24px;text-align:center;color:var(--text3);font-size:16px">›</td>
         </tr>
       `;
-    }).join('');
+    });
+
+    tbody.innerHTML = html;
   }
 
   document.getElementById('page-info').textContent = `共 ${total} 筆，第 ${page}/${totalPages} 頁`;
@@ -872,8 +930,9 @@ function populateFilters() {
 }
 
 function badgeHtml(status) {
+  if (!status) return '<span style="color:var(--text3)">—</span>';
   const cls = ['待確認','未接','已來訪','已預約','無需求','空號'].includes(status) ? 'badge-'+status : 'badge-default';
-  return `<span class="badge ${cls}">${esc(status)||'—'}</span>`;
+  return `<span class="badge ${cls}">${esc(status)}</span>`;
 }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -907,7 +966,7 @@ function openModal(id) {
     document.getElementById('f-name').value = '';
     document.getElementById('f-phone').value = '';
     document.getElementById('f-region').value = '臺中市';
-    document.getElementById('f-contact-status').value = '待確認';
+    document.getElementById('f-contact-status').value = '';
     document.getElementById('f-appt-date').value = '';
     document.getElementById('f-appt-time').value = '';
     document.getElementById('fg-appt').classList.remove('show');
@@ -933,7 +992,6 @@ async function saveRecord() {
 
   const apptDate = document.getElementById('f-appt-date').value.trim();
   const apptTime = document.getElementById('f-appt-time').value.trim();
-
   const tempId = editingId || ('temp_' + Date.now());
 
   const rec = {
@@ -972,7 +1030,6 @@ async function saveRecord() {
       rec.id = result.newId;
     }
     showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
-
     if (rec.status === '已預約' && rec.apptDate && rec.apptTime) {
       if (action === 'add') {
         await syncToCalendar(rec);
@@ -1022,7 +1079,6 @@ async function deleteRecord() {
   }
 }
 
-// ─── 匯出 ───
 function exportCSV() {
   const filtered = getFiltered();
   const headers = ['日期','姓名','電話','區域','聯絡狀況','媒體','跑單','派發日','預約日期','預約時間','詳細狀況'];
@@ -1039,7 +1095,6 @@ function exportCSV() {
   showToast('CSV 已匯出', 'success');
 }
 
-// ─── Toast ───
 function showToast(msg, type='success') {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1048,7 +1103,6 @@ function showToast(msg, type='success') {
   setTimeout(()=>t.classList.remove('show'), 2800);
 }
 
-// ─── 初始化 ───
 window.addEventListener('DOMContentLoaded', async () => {
   setSyncStatus('loading');
   await loadData();
@@ -1071,6 +1125,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('f-media').value = '';
       document.getElementById('f-date').value = '';
       document.getElementById('f-year-filter').value = '';
+      sortCol = 'date'; sortAsc = false;
       page = 1;
       renderTable();
     };
@@ -1119,7 +1174,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('loading-overlay').style.display = 'none';
   showToast('名單已載入，共 ' + records.length + ' 筆', 'success');
 
-  // 每 3 分鐘自動重新載入
   setInterval(async () => {
     await loadData();
     renderTable();
