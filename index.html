@@ -455,7 +455,7 @@
         <th onclick="sortBy('status')">聯絡狀況</th>
         <th onclick="sortBy('media')">媒體</th>
         <th onclick="sortBy('agent')">跑單</th>
-        <th onclick="sortBy('dispatch')">派發日</th>
+        <th onclick="sortBy('dispatch')">派發日 <span id="sort-dispatch"></span></th>
         <th onclick="sortBy('apptDate')">預約日期 <span id="sort-apptDate"></span></th>
         <th onclick="sortBy('apptTime')">預約時間 <span id="sort-apptTime"></span></th>
         <th>詳細狀況</th>
@@ -564,7 +564,8 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
 let records = [];
 let editingId = null;
-let sortCol = 'date';
+// ★ 預設排序改為「派發日」遞減，未派發排最前面
+let sortCol = 'dispatch';
 let sortAsc = false;
 let page = 1;
 const PAGE_SIZE = 50;
@@ -628,7 +629,6 @@ async function loadData() {
     const res = await fetch(API_URL);
     const json = await res.json();
     if (json.ok) {
-      // 過濾掉已標記刪除的列
       records = json.data.filter(r => r.name && r.name !== '__deleted__').map(r => normalizeRecord(r));
       setSyncStatus('ok');
     } else {
@@ -646,7 +646,7 @@ async function apiCall(action, record) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // ★ 避免 CORS preflight
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action, record })
     });
     const json = await res.json();
@@ -674,6 +674,15 @@ function setSyncStatus(state) {
   }
 }
 
+// ─── 日期數值轉換（年份 + 月/日 → 可比較數字）───
+function dateToNum(year, dateStr) {
+  const yr = parseInt(year || 0);
+  const parts = (dateStr || '').split('/').map(Number);
+  const m = parts[0] || 0;
+  const d = parts[1] || 0;
+  return yr * 10000 + m * 100 + d;
+}
+
 // ─── 篩選 & 排序 ───
 function getFiltered() {
   const q = document.getElementById('search').value.toLowerCase();
@@ -691,18 +700,32 @@ function getFiltered() {
     if (fYear && r.year !== fYear) return false;
     return true;
   }).sort((a, b) => {
+    // ★ 未派發（dispatch 為空）永遠排最前面，不受 sortCol / sortAsc 影響
+    const aNoDispatch = !a.dispatch;
+    const bNoDispatch = !b.dispatch;
+    if (aNoDispatch !== bNoDispatch) return aNoDispatch ? -1 : 1;
+
+    // 同為未派發時，依日期遞減排列
+    if (aNoDispatch && bNoDispatch) {
+      const da = dateToNum(a.year, a.date);
+      const db = dateToNum(b.year, b.date);
+      return db - da;
+    }
+
+    // ★ 一般排序邏輯
     let av = a[sortCol] || '', bv = b[sortCol] || '';
     if (sortCol === 'date' || sortCol === 'dispatch') {
-      const fa = sortCol === 'date' ? (a.date||'') : (a.dispatch||'');
-      const fb = sortCol === 'date' ? (b.date||'') : (b.dispatch||'');
-      const ya = parseInt(a.year||0), yb = parseInt(b.year||0);
-      if (ya !== yb) return sortAsc ? ya - yb : yb - ya;
-      const [am=0,ad=0] = fa.split('/').map(Number);
-      const [bm=0,bd=0] = fb.split('/').map(Number);
-      const da = am*100+ad, db = bm*100+bd;
-      return sortAsc ? da - db : db - da;
+      const fa = sortCol === 'date' ? (a.date || '') : (a.dispatch || '');
+      const fb = sortCol === 'date' ? (b.date || '') : (b.dispatch || '');
+      const ya = parseInt(a.year || 0), yb = parseInt(b.year || 0);
+      // dispatch 沒有年份欄位，改用 date 的年份做輔助
+      const dispYa = sortCol === 'dispatch' ? parseInt(a.year || 0) : ya;
+      const dispYb = sortCol === 'dispatch' ? parseInt(b.year || 0) : yb;
+      const numA = dateToNum(dispYa, fa);
+      const numB = dateToNum(dispYb, fb);
+      return sortAsc ? numA - numB : numB - numA;
     }
-    return sortAsc ? av.localeCompare(bv,'zh-TW') : bv.localeCompare(av,'zh-TW');
+    return sortAsc ? av.localeCompare(bv, 'zh-TW') : bv.localeCompare(av, 'zh-TW');
   });
 }
 
@@ -752,7 +775,7 @@ function renderTable() {
     function inRange(r, mon, sun) {
       const parts = (r.date||'').split('/');
       if (parts.length < 2) return false;
-      const yr = parseInt(r.year) || 2025;
+      const yr = parseInt(r.year||0) || 2025;
       const d = new Date(yr, parseInt(parts[0])-1, parseInt(parts[1]));
       return d >= mon && d <= sun;
     }
@@ -771,8 +794,10 @@ function renderTable() {
   } else {
     document.getElementById('empty-state').style.display = 'none';
     tbody.innerHTML = slice.map(r => {
+      // ★ 未派發的列加上淡色背景以便辨識
+      const noDispatchStyle = !r.dispatch ? 'background:rgba(196,126,42,0.06);' : '';
       return `
-        <tr onclick="openModal('${r.id}')">
+        <tr onclick="openModal('${r.id}')" style="${noDispatchStyle}">
           <td style="color:var(--text3);font-size:12px">${r.year || '—'}</td>
           <td style="color:var(--text2);font-size:12px">${r.date || '—'}</td>
           <td style="font-weight:500">${esc(r.name)}</td>
@@ -781,7 +806,7 @@ function renderTable() {
           <td>${badgeHtml(r.status)}</td>
           <td style="color:var(--text2)">${esc(r.media)}</td>
           <td style="color:var(--text2)">${esc(r.agent)}</td>
-          <td style="color:var(--text2);font-size:12px">${esc(r.dispatch)}</td>
+          <td style="color:var(--text2);font-size:12px">${r.dispatch ? esc(r.dispatch) : '<span style="color:var(--warn);font-weight:600">未派發</span>'}</td>
           <td class="appt-col"><span class="appt-date">${esc(r.apptDate) || '<span style="color:var(--text3)">—</span>'}</span></td>
           <td class="appt-col"><span class="appt-time" style="font-size:13px;color:var(--purple)">${esc(r.apptTime) || '<span style="color:var(--text3)">—</span>'}</span></td>
           <td class="notes-col" title="${esc(r.notes)}">${esc(r.notes)}</td>
@@ -909,7 +934,6 @@ async function saveRecord() {
   const apptDate = document.getElementById('f-appt-date').value.trim();
   const apptTime = document.getElementById('f-appt-time').value.trim();
 
-  // ★ 新增時先用暫時 id，等後端回傳後換成真實行號
   const tempId = editingId || ('temp_' + Date.now());
 
   const rec = {
@@ -942,7 +966,6 @@ async function saveRecord() {
 
   const result = await apiCall(action, rec);
   if (result && result.ok) {
-    // ★ 新增成功後，將暫時 id 替換為後端回傳的真實行號
     if (action === 'add' && result.newId) {
       const idx = records.findIndex(r => r.id === tempId);
       if (idx >= 0) records[idx].id = result.newId;
@@ -950,7 +973,6 @@ async function saveRecord() {
     }
     showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
 
-    // 日曆同步
     if (rec.status === '已預約' && rec.apptDate && rec.apptTime) {
       if (action === 'add') {
         await syncToCalendar(rec);
@@ -961,7 +983,6 @@ async function saveRecord() {
       await apiCall('deleteCalendar', { eventId: rec.eventId, id: rec.id });
     }
   } else {
-    // ★ 儲存失敗：從 records 移除暫時新增的項目，並提示重試
     if (action === 'add') {
       records = records.filter(r => r.id !== tempId);
       renderTable();
