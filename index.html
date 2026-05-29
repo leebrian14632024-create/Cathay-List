@@ -583,6 +583,7 @@ let records = [];
 let editingId = null;
 let sortCol = 'date';
 let sortAsc = false;
+let userSortActive = false; // ★ 只有使用者主動點欄位標題才設為 true
 let page = 1;
 const PAGE_SIZE = 50;
 
@@ -710,10 +711,10 @@ function defaultSort(a, b) {
   if (aIsOld !== bIsOld) return aIsOld ? 1 : -1;
 
   if (!aIsOld && !bIsOld) {
-    // 同為當前年：無 status（新進名單）排前面
-    const aNoStatus = !a.status;
-    const bNoStatus = !b.status;
-    if (aNoStatus !== bNoStatus) return aNoStatus ? -1 : 1;
+    // 同為當前年：派發日為空（未派發）排前面
+    const aNoDispatch = !a.dispatch;
+    const bNoDispatch = !b.dispatch;
+    if (aNoDispatch !== bNoDispatch) return aNoDispatch ? -1 : 1;
   }
 
   // 同區塊內：依日期遞減（年份相同時只比月日）
@@ -757,10 +758,9 @@ function getFiltered() {
     return true;
   });
 
-  // 使用者有手動點欄位 → userSort；否則 → defaultSort
-  const isUserSort = sortCol !== 'date' || sortAsc !== false;
+  // 使用者有主動點欄位標題 → userSort；否則永遠用 defaultSort
   filtered.sort((a, b) => {
-    if (isUserSort) return userSort(a, b, sortCol, sortAsc);
+    if (userSortActive) return userSort(a, b, sortCol, sortAsc);
     return defaultSort(a, b);
   });
 
@@ -770,6 +770,7 @@ function getFiltered() {
 function sortBy(col) {
   if (sortCol === col) sortAsc = !sortAsc;
   else { sortCol = col; sortAsc = false; }
+  userSortActive = true; // ★ 使用者主動點欄位
   page = 1;
   renderTable();
 }
@@ -784,6 +785,7 @@ function clearFilters() {
   // 清除篩選同時重置為預設排序
   sortCol = 'date';
   sortAsc = false;
+  userSortActive = false; // ★ 回到預設排序
   page = 1;
   renderTable();
 }
@@ -815,9 +817,10 @@ function renderTable() {
       return { mon, sun };
     }
     function inRange(r, mon, sun) {
-      const parts = (r.date||'').split('/');
+      const dispStr = r.dispatch || "";
+      const parts = dispStr.split("/");
       if (parts.length < 2) return false;
-      const yr = parseInt(r.year||0) || 2025;
+      const yr = parseInt(r.year || 0) || new Date().getFullYear();
       const d = new Date(yr, parseInt(parts[0])-1, parseInt(parts[1]));
       return d >= mon && d <= sun;
     }
@@ -842,7 +845,7 @@ function renderTable() {
     slice.forEach(r => {
       const yr = r.year || '—';
       const isOld = parseInt(r.year || 0) < CURRENT_YEAR;
-      const isNewUnassigned = !isOld && !r.status;
+      const isNewUnassigned = !isOld && !r.dispatch;
 
       // 插入年份分隔線（當年份切換時）
       if (yr !== lastYear) {
@@ -1125,7 +1128,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('f-media').value = '';
       document.getElementById('f-date').value = '';
       document.getElementById('f-year-filter').value = '';
-      sortCol = 'date'; sortAsc = false;
+      sortCol = 'date'; sortAsc = false; userSortActive = false;
       page = 1;
       renderTable();
     };
