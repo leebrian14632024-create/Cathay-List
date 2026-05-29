@@ -463,8 +463,8 @@
   <table>
     <thead>
       <tr>
-        <th onclick="sortBy('year')">年份 <span id="sort-year"></span></th>
-        <th onclick="sortBy('date')">日期 <span id="sort-date"></span></th>
+        <th>年份</th>
+        <th>日期 ↓</th>
         <th onclick="sortBy('name')">姓名 <span id="sort-name"></span></th>
         <th onclick="sortBy('phone')">電話</th>
         <th onclick="sortBy('region')">區域</th>
@@ -887,7 +887,7 @@ function renderTable() {
   btns += `<button class="page-btn" onclick="changePage(${page+1})" ${page>=totalPages?'disabled':''}>›</button>`;
   pbDiv.innerHTML = btns;
 
-  ['year','date','name','phone','region','status','media','agent','dispatch','apptDate','apptTime'].forEach(c => {
+  ['name','phone','region','status','media','agent','dispatch','apptDate','apptTime'].forEach(c => {
     const el = document.getElementById('sort-'+c);
     if (el) el.textContent = sortCol===c ? (sortAsc?'↑':'↓') : '';
   });
