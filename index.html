@@ -88,11 +88,11 @@
     font-size: 10px;
     color: var(--text3);
     margin-top: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 130px;
-    cursor: default;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.5;
+    text-align: center;
+    max-width: 120px;
   }
   .toolbar {
     padding: 14px 24px;
@@ -438,7 +438,7 @@
   <div class="stat"><div class="stat-num" id="s-missed" style="color:var(--warn)">—</div><div class="stat-label">未接</div></div>
   <div class="stat"><div class="stat-num" id="s-no-need" style="color:var(--danger)">—</div><div class="stat-label">無需求</div></div>
   <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
-  <div class="stat">
+  <div class="stat" style="min-width:130px">
     <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
     <div class="stat-label">本週新增</div>
     <div class="stat-media-breakdown" id="s-week-media"></div>
@@ -705,7 +705,16 @@ function setSyncStatus(state) {
   }
 }
 
-// ─── 日期轉數字（月/日 → 可比較） ───
+// ─── 媒體名稱標準化（合併同義詞，如 FB / facebook） ───
+function normalizeMediaName(m) {
+  if (!m) return '未填';
+  const s = String(m).trim();
+  const lower = s.toLowerCase();
+  if (lower === 'fb' || lower === 'facebook') return 'FB';
+  return s;
+}
+
+
 function dateToNum(dateStr) {
   const parts = (dateStr || '').split('/').map(Number);
   return (parts[0] || 0) * 100 + (parts[1] || 0);
@@ -844,10 +853,10 @@ function renderTable() {
     document.getElementById('s-week').textContent = thisWeekRecords.length;
     document.getElementById('s-lastweek').textContent = records.filter(r => inRange(r, lastWeek.mon, lastWeek.sun)).length;
 
-    // 本週新增依媒體分類統計
+    // 本週新增依媒體分類統計（FB / facebook 視為同一類）
     const mediaCount = {};
     thisWeekRecords.forEach(r => {
-      const m = r.media || '未填';
+      const m = normalizeMediaName(r.media);
       mediaCount[m] = (mediaCount[m] || 0) + 1;
     });
     const mediaBreakdown = Object.entries(mediaCount)
