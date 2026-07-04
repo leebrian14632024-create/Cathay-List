@@ -438,6 +438,7 @@
   <div class="stat"><div class="stat-num" id="s-missed" style="color:var(--warn)">—</div><div class="stat-label">未接</div></div>
   <div class="stat"><div class="stat-num" id="s-no-need" style="color:var(--danger)">—</div><div class="stat-label">無需求</div></div>
   <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
+  <div class="stat"><div class="stat-num" id="s-today-dispatch" style="color:var(--accent2)">—</div><div class="stat-label">當日派發名單</div></div>
   <div class="stat" style="min-width:130px">
     <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
     <div class="stat-label">本週新增</div>
@@ -852,6 +853,11 @@ function renderTable() {
     const thisWeekRecords = records.filter(r => inRange(r, thisWeek.mon, thisWeek.sun));
     document.getElementById('s-week').textContent = thisWeekRecords.length;
     document.getElementById('s-lastweek').textContent = records.filter(r => inRange(r, lastWeek.mon, lastWeek.sun)).length;
+
+    // 當日派發名單：派發日等於今天
+    const today = new Date();
+    const todayStr = (today.getMonth()+1) + '/' + today.getDate();
+    document.getElementById('s-today-dispatch').textContent = records.filter(r => (r.dispatch || '').trim() === todayStr).length;
 
     // 本週新增依媒體分類統計（FB / facebook 視為同一類）
     const mediaCount = {};
