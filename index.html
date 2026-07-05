@@ -88,11 +88,16 @@
     font-size: 10px;
     color: var(--text3);
     margin-top: 4px;
-    white-space: normal;
-    word-break: break-word;
-    line-height: 1.5;
+    line-height: 1.6;
     text-align: center;
-    max-width: 120px;
+    max-width: 150px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px 6px;
+  }
+  .stat-media-breakdown span {
+    white-space: nowrap;
   }
   .toolbar {
     padding: 14px 24px;
@@ -865,14 +870,17 @@ function renderTable() {
       const m = normalizeMediaName(r.media);
       mediaCount[m] = (mediaCount[m] || 0) + 1;
     });
-    const mediaBreakdown = Object.entries(mediaCount)
+    const mediaItems = Object.entries(mediaCount)
       .sort((a, b) => b[1] - a[1])
-      .map(([m, c]) => `${m}${c}`)
-      .join('、');
+      .map(([m, c]) => `${m}${c}`);
     const mediaEl = document.getElementById('s-week-media');
     if (mediaEl) {
-      mediaEl.textContent = mediaBreakdown || '—';
-      mediaEl.title = mediaBreakdown || '本週尚無新增名單';
+      if (mediaItems.length) {
+        mediaEl.innerHTML = mediaItems.map((t, i) => `<span>${esc(t)}${i < mediaItems.length - 1 ? '、' : ''}</span>`).join('');
+      } else {
+        mediaEl.innerHTML = '<span>—</span>';
+      }
+      mediaEl.title = mediaItems.join('、') || '本週尚無新增名單';
     }
   }
 
