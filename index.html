@@ -73,6 +73,7 @@
     border-bottom: 1px solid var(--border);
     padding: 12px 24px;
     display: flex;
+    align-items: center;
     gap: 24px;
     overflow-x: auto;
   }
@@ -97,6 +98,30 @@
     gap: 2px 6px;
   }
   .stat-media-breakdown span {
+    white-space: nowrap;
+  }
+  .stat-media-breakdown.nowrap {
+    flex-wrap: nowrap;
+    max-width: none;
+    white-space: nowrap;
+  }
+  .stat-media-breakdown.font-lg {
+    font-size: 13px;
+    color: var(--text2);
+    max-width: 200px;
+  }
+  .stat-media-breakdown.large {
+    font-size: 13px;
+    color: var(--text2);
+    max-width: none;
+    flex-direction: column;
+    gap: 3px 0;
+  }
+  .stat-media-breakdown.large .breakdown-row {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 6px;
     white-space: nowrap;
   }
   .toolbar {
@@ -443,13 +468,20 @@
   <div class="stat"><div class="stat-num" id="s-missed" style="color:var(--warn)">—</div><div class="stat-label">未接</div></div>
   <div class="stat"><div class="stat-num" id="s-no-need" style="color:var(--danger)">—</div><div class="stat-label">無需求</div></div>
   <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
+  <div class="stat"><div class="stat-num" id="s-lastweek" style="color:var(--text2)">—</div><div class="stat-label">上週名單</div></div>
   <div class="stat"><div class="stat-num" id="s-today-dispatch" style="color:var(--accent2)">—</div><div class="stat-label">當日派發名單</div></div>
-  <div class="stat" style="min-width:130px">
+  <div class="stat">
     <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
     <div class="stat-label">本週新增</div>
-    <div class="stat-media-breakdown" id="s-week-media"></div>
   </div>
-  <div class="stat"><div class="stat-num" id="s-lastweek" style="color:var(--text2)">—</div><div class="stat-label">上週名單</div></div>
+  <div class="stat" style="min-width:160px">
+    <div class="stat-label">本週名單來源</div>
+    <div class="stat-media-breakdown font-lg" id="s-week-media"></div>
+  </div>
+  <div class="stat" style="min-width:220px">
+    <div class="stat-label">本週聯絡狀況</div>
+    <div class="stat-media-breakdown large" id="s-week-status"></div>
+  </div>
 </div>
 
 <div class="toolbar">
@@ -863,6 +895,31 @@ function renderTable() {
     const today = new Date();
     const todayStr = (today.getMonth()+1) + '/' + today.getDate();
     document.getElementById('s-today-dispatch').textContent = records.filter(r => (r.dispatch || '').trim() === todayStr).length;
+
+    // 本週聯絡狀況統計（依 thisWeekRecords，同「本週新增」的統計範圍）
+    const statusCount = {};
+    thisWeekRecords.forEach(r => {
+      const s = r.status || '未填寫';
+      statusCount[s] = (statusCount[s] || 0) + 1;
+    });
+    const statusItems = Object.entries(statusCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([s, c]) => `${s}${c}`);
+    const statusEl = document.getElementById('s-week-status');
+    if (statusEl) {
+      if (statusItems.length) {
+        const rows = [];
+        for (let i = 0; i < statusItems.length; i += 3) {
+          rows.push(statusItems.slice(i, i + 3));
+        }
+        statusEl.innerHTML = rows.map(row =>
+          `<div class="breakdown-row">${row.map((t, i) => `<span>${esc(t)}${i < row.length - 1 ? '、' : ''}</span>`).join('')}</div>`
+        ).join('');
+      } else {
+        statusEl.innerHTML = '<div class="breakdown-row"><span>—</span></div>';
+      }
+      statusEl.title = statusItems.join('、') || '本週尚無名單';
+    }
 
     // 本週新增依媒體分類統計（FB / facebook 視為同一類）
     const mediaCount = {};
