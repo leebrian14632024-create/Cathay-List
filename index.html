@@ -600,6 +600,11 @@
           <input class="form-input" type="text" id="f-dispatch" placeholder="5/19">
         </div>
 
+        <div class="form-group full" id="fg-ad-campaign" style="display:none">
+          <label class="form-label">🏷️ 廣告來源活動（自動帶入，唯讀）</label>
+          <div id="f-ad-campaign-display" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text2);font-size:13px;"></div>
+        </div>
+
         <div class="appt-section" id="fg-appt">
           <div class="appt-section-title">📅 預約資訊</div>
           <div class="form-group">
@@ -1072,6 +1077,16 @@ function openModal(id) {
     document.getElementById('f-agent-input').value = r.agent || '';
     document.getElementById('f-dispatch').value = r.dispatch || '';
     document.getElementById('f-notes').value = r.notes || '';
+
+    // 廣告來源活動（唯讀顯示，只有同步進來且有值的名單才顯示）
+    const adGroup = document.getElementById('fg-ad-campaign');
+    if (r.adCampaign) {
+      document.getElementById('f-ad-campaign-display').textContent = r.adCampaign;
+      adGroup.style.display = '';
+    } else {
+      adGroup.style.display = 'none';
+    }
+
     del.style.display = '';
   } else {
     document.getElementById('modal-title').textContent = '新增聯絡人';
@@ -1089,6 +1104,7 @@ function openModal(id) {
     const today = new Date();
     document.getElementById('f-dispatch').value = (today.getMonth()+1) + '/' + today.getDate();
     document.getElementById('f-notes').value = '';
+    document.getElementById('fg-ad-campaign').style.display = 'none'; // 新增名單一律沒有廣告活動資料
     del.style.display = 'none';
   }
   modal.classList.add('open');
