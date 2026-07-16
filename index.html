@@ -1185,21 +1185,8 @@ async function saveRecord() {
   }
 }
 
-// 組出行事曆事件的「說明欄」內容（含廣告來源），供後端 addCalendar 寫入
-function buildCalendarDesc(rec) {
-  const lines = [];
-  if (rec.phone)      lines.push('📱 電話：' + rec.phone);
-  if (rec.region)     lines.push('📍 區域：' + rec.region);
-  if (rec.media)      lines.push('📢 媒體：' + rec.media);
-  if (rec.adCampaign) lines.push('🏷️ 廣告來源：' + rec.adCampaign);
-  if (rec.agent)      lines.push('🙋 跑單業務：' + rec.agent);
-  if (rec.notes)      lines.push('📝 備註：' + rec.notes);
-  return lines.join('\n');
-}
-
 async function syncToCalendar(rec) {
-  const payload = Object.assign({}, rec, { calDescription: buildCalendarDesc(rec) });
-  const result = await apiCall('addCalendar', payload);
+  const result = await apiCall('addCalendar', rec);
   if (result && result.ok && result.msg === 'calendar_added') {
     showToast('已新增至 Google 行事曆 📅', 'success');
   }
@@ -1209,8 +1196,7 @@ async function updateCalendar(rec) {
   if (rec.eventId) {
     await apiCall('deleteCalendar', { eventId: rec.eventId, id: rec.id });
   }
-  const payload = Object.assign({}, rec, { calDescription: buildCalendarDesc(rec) });
-  const result = await apiCall('addCalendar', payload);
+  const result = await apiCall('addCalendar', rec);
   if (result && result.ok && result.msg === 'calendar_added') {
     showToast('日曆事件已更新 📅', 'success');
   }
