@@ -552,6 +552,10 @@
     </div>
     <div class="modal-body">
       <div class="form-grid">
+        <div class="form-group full" id="fg-ad-campaign" style="display:none">
+          <label class="form-label">🏷️ 廣告來源活動（唯讀）</label>
+          <div id="f-ad-campaign-display" style="background:rgba(139,99,64,0.08);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;color:var(--accent);font-size:12px;font-weight:500;line-height:1.5;word-break:break-word;max-height:54px;overflow-y:auto;"></div>
+        </div>
         <div class="form-group">
           <label class="form-label">年份</label>
           <input class="form-input" type="number" id="f-year" placeholder="2024" min="2020" max="2099">
@@ -598,11 +602,6 @@
         <div class="form-group">
           <label class="form-label">派發日</label>
           <input class="form-input" type="text" id="f-dispatch" placeholder="5/19">
-        </div>
-
-        <div class="form-group full" id="fg-ad-campaign" style="display:none">
-          <label class="form-label">🏷️ 廣告來源活動（自動帶入，唯讀）</label>
-          <div id="f-ad-campaign-display" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text2);font-size:13px;"></div>
         </div>
 
         <div class="appt-section" id="fg-appt">
@@ -896,10 +895,13 @@ function renderTable() {
     document.getElementById('s-week').textContent = thisWeekRecords.length;
     document.getElementById('s-lastweek').textContent = records.filter(r => inRange(r, lastWeek.mon, lastWeek.sun)).length;
 
-    // 當日派發名單：派發日等於今天
+    // 當日派發名單：派發日等於今天（且限定今年，避免 2025/2024 等歷年同一天被一併計入）
     const today = new Date();
     const todayStr = (today.getMonth()+1) + '/' + today.getDate();
-    document.getElementById('s-today-dispatch').textContent = records.filter(r => (r.dispatch || '').trim() === todayStr).length;
+    const thisYear = today.getFullYear();
+    document.getElementById('s-today-dispatch').textContent = records.filter(r =>
+      (r.dispatch || '').trim() === todayStr && parseInt(r.year || 0) === thisYear
+    ).length;
 
     // 本週聯絡狀況統計（依 thisWeekRecords，同「本週新增」的統計範圍）
     const statusCount = {};
@@ -1139,6 +1141,8 @@ async function saveRecord() {
     apptDate,
     apptTime,
     eventId: editingId ? ((records.find(r=>r.id===editingId)||{}).eventId || '') : '',
+    // 廣告來源為唯讀欄位，儲存時沿用原值，避免編輯/派發後被覆蓋清空
+    adCampaign: editingId ? ((records.find(r=>r.id===editingId)||{}).adCampaign || '') : '',
   };
 
   const action = editingId ? 'update' : 'add';
