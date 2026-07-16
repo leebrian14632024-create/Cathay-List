@@ -1177,10 +1177,15 @@ function getSourceStats(scope) {
     groups[src].status[st] = (groups[src].status[st] || 0) + 1;
     if (inWeek) groups[src].weekCount++; // 一律計算本週派發數
   });
-  // 轉陣列，來源名稱把日期提前，並依此排序（自然依日期由早到晚）
+  // 轉陣列，來源名稱把日期提前，並依「開頭日期數字」由新到舊排序（大→小）
   return Object.values(groups)
     .map(g => Object.assign(g, { display: reorderCampaign(g.name) }))
-    .sort((a, b) => a.display.localeCompare(b.display, 'zh-Hant'));
+    .sort((a, b) => {
+      const na = parseInt((a.display.match(/^\d+/) || ['0'])[0], 10);
+      const nb = parseInt((b.display.match(/^\d+/) || ['0'])[0], 10);
+      if (na !== nb) return nb - na; // 日期數字大（較新）排前面
+      return a.display.localeCompare(b.display, 'zh-Hant');
+    });
 }
 
 const STATUS_ORDER = ['已預約','已來訪','待確認','未接','無需求','空號','未填寫'];
